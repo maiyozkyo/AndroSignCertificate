@@ -19,6 +19,7 @@ namespace Cer
         string AWS_ACCESS_ID;
         string AWS_SECRET_KEY;
         string AWS_S3_BUCKET;
+        string SyncFusionLicense;
         RegionEndpoint bucketRegion = RegionEndpoint.APSoutheast1;
 
         public Certificate(IConfiguration configuration){
@@ -26,6 +27,7 @@ namespace Cer
             AWS_ACCESS_ID = _configuration.GetSection("AWS:AWS_ACCESS_ID").Value;
             AWS_SECRET_KEY = _configuration.GetSection("AWS:AWS_SECRET_KEY").Value;
             AWS_S3_BUCKET = _configuration.GetSection("AWS:AWS_S3_BUCKET").Value;
+            SyncFusionLicense = _configuration.GetSection("SyncLicense").Value;
         }
 
         public async Task<bool> UploadFile(byte[] fileBytes, string fileName)
@@ -106,7 +108,7 @@ namespace Cer
 
         public async Task<bool> signPdf(string pdfName, string userName, string passWord, int pageNumber)
         {
-            Syncfusion.Licensing.SyncfusionLicenseProvider.RegisterLicense("Mgo+DSMBMAY9C3t2VFhiQlFacFRDX3xKf0x/TGpQb19xflBPallYVBYiSV9jS31Tc0dmWHlddHFTRWZaUA==");
+            Syncfusion.Licensing.SyncfusionLicenseProvider.RegisterLicense(SyncFusionLicense);
             var pdfBytes = await DownloadFile(pdfName);
             PdfLoadedDocument loadedDocument = new PdfLoadedDocument(pdfBytes);
             //Load digital ID with password.
