@@ -64,7 +64,7 @@ namespace Cer
             }
         }
 
-        public byte[] createSelfCer(string issued, string password)
+        public byte[] createSelfCer(string issued, string password, int expireAfter = 90)
         {
             using (RSA rsa = RSACng.Create(2048))
             {
@@ -96,7 +96,7 @@ namespace Cer
                 req.CertificateExtensions.Add(
                     new X509SubjectKeyIdentifierExtension(req.PublicKey, false));
 
-                using (X509Certificate2 cert = req.CreateSelfSigned(DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddDays(90)))
+                using (X509Certificate2 cert = req.CreateSelfSigned(DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddDays(expireAfter)))
                 {
                     var cerBytes = cert.Export(X509ContentType.Pfx, password);
                     return cerBytes;
@@ -106,6 +106,7 @@ namespace Cer
 
         public async Task<bool> signPdf(string pdfName, string userName, string passWord, int pageNumber)
         {
+            Syncfusion.Licensing.SyncfusionLicenseProvider.RegisterLicense("Mgo+DSMBMAY9C3t2VFhiQlFacFRDX3xKf0x/TGpQb19xflBPallYVBYiSV9jS31Tc0dmWHlddHFTRWZaUA==");
             var pdfBytes = await DownloadFile(pdfName);
             PdfLoadedDocument loadedDocument = new PdfLoadedDocument(pdfBytes);
             //Load digital ID with password.
@@ -128,16 +129,18 @@ namespace Cer
             signature.Appearance.Normal.Graphics.DrawImage(signatureImage, signature.Bounds);
             signature.Settings.DigestAlgorithm = DigestAlgorithm.SHA256;
             //This property enables the author or certifying signature.
-            signature.Certificated = true;
+            //signature.Certificated = true;
+            //signature.DocumentPermissions = PdfCertificationFlags.ForbidChanges;
+            //signature.DocumentPermissions = PdfCertificationFlags.AllowFormFill | PdfCertificationFlags.AllowComments;
             //Allow the form fill and and comments.
-            signature.DocumentPermissions = PdfCertificationFlags.AllowFormFill | PdfCertificationFlags.AllowComments;
+            //signature.DocumentPermissions = PdfCertificationFlags.AllowFormFill | PdfCertificationFlags.AllowComments;
 
             //Save the document into stream.
             MemoryStream stream = new MemoryStream();
             loadedDocument.Save(stream);
             stream.Position = 0;
             //Close the document.
-            var result = await UploadFile(stream.ToArray(), pdfName.Replace(".pdf", "") + "_signed.pdf");
+            var result = await UploadFile(stream.ToArray() , pdfName.Replace(".pdf", "") + "_signed.pdf");
             loadedDocument.Close(true);
             return result;
         }
