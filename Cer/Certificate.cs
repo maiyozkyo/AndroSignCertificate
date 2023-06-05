@@ -121,7 +121,7 @@ namespace Cer
             doc.MergeXFDF(sXfdf);
             #endregion
 
-            var mergeBytes = (byte[])doc.Save(pdftron.SDF.SDFDoc.SaveOptions.e_compatibility);
+            var mergeBytes = doc.Save(pdftron.SDF.SDFDoc.SaveOptions.e_compatibility);
             doc.Close();
 
             #region Syncfusion
@@ -184,14 +184,6 @@ namespace Cer
             }
             return "";
             #endregion
-        }
-
-        public async Task<bool> mergeXFDF(string pdfPath, string xfdfPath)
-        {
-            
-
-            #endregion
-            return true;
         }
     }
 }
