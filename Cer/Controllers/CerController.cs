@@ -1,4 +1,5 @@
 ﻿using Microsoft.AspNetCore.Mvc;
+using Syncfusion.Pdf.Graphics;
 using System.IO;
 
 // For more information on enabling Web API for empty projects, visit https://go.microsoft.com/fwlink/?LinkID=397860
@@ -31,9 +32,15 @@ namespace Cer.Controllers
         }
 
         [HttpGet("SignPDF")]
-        public async Task<IActionResult> SignPDF([FromQuery] string pdfName, [FromQuery] string userName, [FromQuery] string passWord, [FromQuery] int pageNumber)
+        public async Task<IActionResult> SignPDF(/*[FromQuery] string pdfName, [FromQuery] string userName, [FromQuery] string passWord, [FromQuery] int pageNumber*/)
         {
-            var result = await _Cer.signPdf(pdfName, userName, passWord, pageNumber);
+            var pdfPath = "nbuubuu";
+            var sXfdf = "123456";
+            var pfxPath = "123456";
+            var passWord = "123456";
+            var imgPath = "123456";
+            var stepNo = 0;
+            var result = await _Cer.signPdf(pdfPath, sXfdf, pfxPath, passWord, imgPath, stepNo);
             return Ok(result);
         }
 
@@ -41,7 +48,6 @@ namespace Cer.Controllers
         public async Task<IActionResult> UploadFile([FromQuery] string filePath, [FromQuery] string fileName)
         {
             var docStream = System.IO.File.ReadAllBytes(filePath);
-
             var result = await _Cer.UploadFile(docStream, fileName);
             return Ok(result);
         }

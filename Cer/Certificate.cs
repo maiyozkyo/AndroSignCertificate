@@ -3,14 +3,13 @@ using Amazon.S3;
 using Amazon.S3.Model;
 using Amazon.S3.Transfer;
 using Syncfusion.Pdf.Parsing;
-using System.Configuration;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
-using System.IO;
 using Syncfusion.Pdf.Security;
 using Syncfusion.Pdf.Graphics;
 using Syncfusion.Drawing;
-
+using pdftron.PDF;
+using System;
 namespace Cer
 {
     public class Certificate
@@ -20,14 +19,16 @@ namespace Cer
         string AWS_SECRET_KEY;
         string AWS_S3_BUCKET;
         string SyncFusionLicense;
+        string PdfTronLicense;
         RegionEndpoint bucketRegion = RegionEndpoint.APSoutheast1;
 
-        public Certificate(IConfiguration configuration){
+        public Certificate(IConfiguration configuration) {
             _configuration = configuration;
             AWS_ACCESS_ID = _configuration.GetSection("AWS:AWS_ACCESS_ID").Value;
             AWS_SECRET_KEY = _configuration.GetSection("AWS:AWS_SECRET_KEY").Value;
             AWS_S3_BUCKET = _configuration.GetSection("AWS:AWS_S3_BUCKET").Value;
             SyncFusionLicense = _configuration.GetSection("SyncLicense").Value;
+            PdfTronLicense = _configuration.GetSection("TronLicense").Value;
         }
 
         public async Task<bool> UploadFile(byte[] fileBytes, string fileName)
@@ -51,7 +52,7 @@ namespace Cer
         }
         public async Task<byte[]> DownloadFile(string fileName)
         {
-            
+
             var s3Client = new AmazonS3Client(AWS_ACCESS_ID, AWS_SECRET_KEY, bucketRegion);
             var objReq = new GetObjectRequest
             {
@@ -106,45 +107,83 @@ namespace Cer
             }
         }
 
-        public async Task<bool> signPdf(string pdfName, string userName, string passWord, int pageNumber)
+        public async Task<string> signPdf(string pdfPath, string sXfdf, string pfxPath, string passWord, string imgPath, int stepNo)
         {
+            var pdfBytes = await DownloadFile(pdfPath);
+            if (pdfBytes == null || pdfBytes.Length == 0)
+            {
+                return "";
+            }
+
+            # region PdfTron
+            pdftron.PDFNet.Initialize();
+            PDFDoc doc = new PDFDoc(pdfBytes, pdfBytes.Length);
+            doc.MergeXFDF(sXfdf);
+            #endregion
+
+            var mergeBytes = (byte[])doc.Save(pdftron.SDF.SDFDoc.SaveOptions.e_compatibility);
+            doc.Close();
+
+            #region Syncfusion
             Syncfusion.Licensing.SyncfusionLicenseProvider.RegisterLicense(SyncFusionLicense);
-            var pdfBytes = await DownloadFile(pdfName);
-            PdfLoadedDocument loadedDocument = new PdfLoadedDocument(pdfBytes);
-            //Load digital ID with password.
-            PdfCertificate certificate = null;
-            var pfxName = userName + ".pfx";
-            var cerBytes = await DownloadFile(pfxName);
+            PdfLoadedDocument pdfDoc = new PdfLoadedDocument(mergeBytes);
+            if (pdfDoc.Form == null)
+            {
+                return "";
+            }
+
+            #region Certificate Authencation
+            var cerBytes = await DownloadFile(pfxPath);
             var cerStream = new MemoryStream(cerBytes);
-            certificate = new PdfCertificate(cerStream, passWord);
-            
+            PdfCertificate certificate = new PdfCertificate(cerStream, passWord);
+            cerStream.Close();
+            #endregion
 
-            //Create a signature with loaded digital ID.
-            PdfSignature signature = new Syncfusion.Pdf.Security.PdfSignature(loadedDocument, loadedDocument.Pages[pageNumber], certificate, "DigitalSignature");
-            signature.Settings.CryptographicStandard = CryptographicStandard.CADES;
-            var imgName = userName + ".png";
-            var imgBytes = await DownloadFile(imgName);
+            #region Signature Image
+            var imgBytes = await DownloadFile(imgPath);
             var imgStream = new MemoryStream(imgBytes);
-
             var signatureImage = PdfBitmap.FromStream(imgStream);
-            signature.Bounds = new RectangleF(0, 0, 200, 100);
-            signature.Appearance.Normal.Graphics.DrawImage(signatureImage, signature.Bounds);
-            signature.Settings.DigestAlgorithm = DigestAlgorithm.SHA256;
-            //This property enables the author or certifying signature.
-            //signature.Certificated = true;
-            //signature.DocumentPermissions = PdfCertificationFlags.ForbidChanges;
-            //signature.DocumentPermissions = PdfCertificationFlags.AllowFormFill | PdfCertificationFlags.AllowComments;
-            //Allow the form fill and and comments.
-            //signature.DocumentPermissions = PdfCertificationFlags.AllowFormFill | PdfCertificationFlags.AllowComments;
+            imgStream.Close();
+            #endregion
 
+            PdfLoadedSignatureField field = pdfDoc.Form.Fields[0] as PdfLoadedSignatureField;
+            //Create a signature with loaded digital ID.
+            #region Signature Properties
+            field.Signature = new Syncfusion.Pdf.Security.PdfSignature(pdfDoc, field.Page, certificate, "DigitalSignature", field);
+            field.Signature.Settings.CryptographicStandard = CryptographicStandard.CADES;
+            field.Signature.ContactInfo = _configuration.GetSection("AppName").Value;
+            field.Signature.Appearance.Normal.Graphics.DrawImage(signatureImage, new PointF(0, 0), field.Signature.Bounds.Size);
+            field.Signature.Settings.DigestAlgorithm = DigestAlgorithm.SHA256;
+            //This property enables the author or certifying signature.
+            field.Signature.Certificated = true;
+            field.Signature.DocumentPermissions = PdfCertificationFlags.ForbidChanges;
+            field.Signature.IsLocked = true;
+            field.Form.ReadOnly = true;
+            #endregion
+            #endregion
+
+            #region Sign Result
+            MemoryStream signedStream = new MemoryStream();
             //Save the document into stream.
-            MemoryStream stream = new MemoryStream();
-            loadedDocument.Save(stream);
-            stream.Position = 0;
+            pdfDoc.Save(signedStream);
+            signedStream.Position = 0;
             //Close the document.
-            var result = await UploadFile(stream.ToArray() , pdfName.Replace(".pdf", "") + "_signed.pdf");
-            loadedDocument.Close(true);
-            return result;
+            //xfdfStream.Position = 0;
+            doc = new PDFDoc(signedStream);
+
+            var xfdfDoc = doc.FDFExtract(PDFDoc.ExtractFlag.e_both);
+            var xfdfString = xfdfDoc.SaveAsXFDF();
+
+            var signedBytes = signedStream.ToArray();
+            var result = await UploadFile(signedBytes, pdfPath);
+            pdfDoc.Close(true);
+            signedStream.Close();
+            if (result)
+            {
+                return xfdfString;
+            }
+            return "";
+            #endregion
         }
     }
 }
