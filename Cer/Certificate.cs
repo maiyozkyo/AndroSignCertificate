@@ -3,14 +3,13 @@ using Amazon.S3;
 using Amazon.S3.Model;
 using Amazon.S3.Transfer;
 using Syncfusion.Pdf.Parsing;
-using System.Configuration;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
-using System.IO;
 using Syncfusion.Pdf.Security;
 using Syncfusion.Pdf.Graphics;
 using Syncfusion.Drawing;
-
+using pdftron.PDF;
+using System;
 namespace Cer
 {
     public class Certificate
@@ -22,7 +21,7 @@ namespace Cer
         string SyncFusionLicense;
         RegionEndpoint bucketRegion = RegionEndpoint.APSoutheast1;
 
-        public Certificate(IConfiguration configuration){
+        public Certificate(IConfiguration configuration) {
             _configuration = configuration;
             AWS_ACCESS_ID = _configuration.GetSection("AWS:AWS_ACCESS_ID").Value;
             AWS_SECRET_KEY = _configuration.GetSection("AWS:AWS_SECRET_KEY").Value;
@@ -51,7 +50,7 @@ namespace Cer
         }
         public async Task<byte[]> DownloadFile(string fileName)
         {
-            
+
             var s3Client = new AmazonS3Client(AWS_ACCESS_ID, AWS_SECRET_KEY, bucketRegion);
             var objReq = new GetObjectRequest
             {
@@ -109,42 +108,89 @@ namespace Cer
         public async Task<bool> signPdf(string pdfName, string userName, string passWord, int pageNumber)
         {
             Syncfusion.Licensing.SyncfusionLicenseProvider.RegisterLicense(SyncFusionLicense);
-            var pdfBytes = await DownloadFile(pdfName);
-            PdfLoadedDocument loadedDocument = new PdfLoadedDocument(pdfBytes);
+            //var pdfBytes = await DownloadFile(pdfName);
+            //PdfLoadedDocument loadedDocument = new PdfLoadedDocument(pdfBytes);
             //Load digital ID with password.
             PdfCertificate certificate = null;
             var pfxName = userName + ".pfx";
             var cerBytes = await DownloadFile(pfxName);
             var cerStream = new MemoryStream(cerBytes);
             certificate = new PdfCertificate(cerStream, passWord);
-            
 
+            var pdfPath = "C:\\Users\\ekkob\\OneDrive\\Máy tính\\AndroSign\\sample.pdf";
+            var xfdfPath = "C:\\Users\\ekkob\\OneDrive\\Máy tính\\AndroSign\\sample.xfdf";
+
+            # region PdfTron
+            pdftron.PDFNet.Initialize("demo:1685720134495:7db667fb0300000000e53ca7f74768e21067569be2eb860e4c7dec9119");
+            PDFDoc doc = new PDFDoc(pdfPath);
+            doc.MergeXFDF(xfdfPath);
+            #endregion
+
+            var mergeBytes = (byte[])doc.Save(pdftron.SDF.SDFDoc.SaveOptions.e_compatibility);
+
+            #region Syncfusion
+            PdfLoadedDocument pdfDoc = new PdfLoadedDocument(mergeBytes);
+
+            if (pdfDoc.Form == null)
+            {
+                return false;
+            }
+            PdfLoadedSignatureField field = pdfDoc.Form.Fields[0] as PdfLoadedSignatureField;
             //Create a signature with loaded digital ID.
-            PdfSignature signature = new Syncfusion.Pdf.Security.PdfSignature(loadedDocument, loadedDocument.Pages[pageNumber], certificate, "DigitalSignature");
-            signature.Settings.CryptographicStandard = CryptographicStandard.CADES;
+
+            field.Signature = new Syncfusion.Pdf.Security.PdfSignature(pdfDoc, pdfDoc.Pages[pageNumber], certificate, "DigitalSignature", field);
+            field.Signature.Settings.CryptographicStandard = CryptographicStandard.CADES;
+
+            #region Signature Image
             var imgName = userName + ".png";
-            var imgBytes = await DownloadFile(imgName);
+            //var imgBytes = await DownloadFile(imgName);
+            imgName = @"C:\Users\ekkob\OneDrive\Máy tính\Screenshot_20190720-174854_Facebook.jpg";
+            var imgBytes = await  File.ReadAllBytesAsync(imgName);
             var imgStream = new MemoryStream(imgBytes);
-
             var signatureImage = PdfBitmap.FromStream(imgStream);
-            signature.Bounds = new RectangleF(0, 0, 200, 100);
-            signature.Appearance.Normal.Graphics.DrawImage(signatureImage, signature.Bounds);
-            signature.Settings.DigestAlgorithm = DigestAlgorithm.SHA256;
+            #endregion
+            #region Signature Properties
+            field.Signature.ContactInfo = _configuration.GetSection("AppName").Value;
+            field.Signature.Appearance.Normal.Graphics.DrawImage(signatureImage, new PointF(0, 0) /*field.Signature.Bounds.Location*/, field.Signature.Bounds.Size);
+            field.Signature.Settings.DigestAlgorithm = DigestAlgorithm.SHA256;
             //This property enables the author or certifying signature.
-            //signature.Certificated = true;
-            //signature.DocumentPermissions = PdfCertificationFlags.ForbidChanges;
-            //signature.DocumentPermissions = PdfCertificationFlags.AllowFormFill | PdfCertificationFlags.AllowComments;
-            //Allow the form fill and and comments.
-            //signature.DocumentPermissions = PdfCertificationFlags.AllowFormFill | PdfCertificationFlags.AllowComments;
+            field.Signature.Certificated = true;
+            field.Signature.DocumentPermissions = PdfCertificationFlags.ForbidChanges;
+            field.Signature.IsLocked = true;
+            field.Form.ReadOnly = true;
+            #endregion
 
-            //Save the document into stream.
             MemoryStream stream = new MemoryStream();
-            loadedDocument.Save(stream);
+            //var xfdfStream = new MemoryStream();
+            var xfdfSignPath = "C:\\Users\\ekkob\\OneDrive\\Máy tính\\AndroSign\\signed.xfdf";
+            
+            //Save the document into stream.
+            pdfDoc.Save(stream);
             stream.Position = 0;
             //Close the document.
-            var result = await UploadFile(stream.ToArray() , pdfName.Replace(".pdf", "") + "_signed.pdf");
-            loadedDocument.Close(true);
+            //xfdfStream.Position = 0;
+            doc = new PDFDoc(stream);
+
+            var xfdfDoc = doc.FDFExtract(PDFDoc.ExtractFlag.e_both);
+            /*var xfdfString = */xfdfDoc.SaveAsXFDF(xfdfSignPath);
+            //var xfdfBytes = System.Convert.FromBase64String(xfdfString);
+            //File.WriteAllBytes(xfdfSignPath, xfdfBytes);
+
+            var signedBytes = stream.ToArray();
+            var signedPath = "C:\\Users\\ekkob\\OneDrive\\Máy tính\\AndroSign\\signed.pdf";
+            File.WriteAllBytes(signedPath, signedBytes);
+            //var result = await UploadFile(signedBytes, pdfName.Replace(".pdf", "") + "_signed.pdf");
+            var result = true;
+            pdfDoc.Close(true);
             return result;
+        }
+
+        public async Task<bool> mergeXFDF(string pdfPath, string xfdfPath)
+        {
+            
+
+            #endregion
+            return true;
         }
     }
 }
