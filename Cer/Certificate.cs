@@ -185,5 +185,13 @@ namespace Cer
             return "";
             #endregion
         }
+
+        public async Task<bool> mergeXFDF(string pdfPath, string xfdfPath)
+        {
+            
+
+            #endregion
+            return true;
+        }
     }
 }

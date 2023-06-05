@@ -51,5 +51,15 @@ namespace Cer.Controllers
             var result = await _Cer.UploadFile(docStream, fileName);
             return Ok(result);
         }
+
+        [HttpPost("MergePdf")]
+        public async Task<IActionResult> MergePdf(/*[FromQuery] string pdfPath, [FromQuery] string xfdfPath*/)
+        { 
+            var pdfPath = "C:\\Users\\ekkob\\OneDrive\\Máy tính\\AndroSign\\sample.pdf";
+            var xfdfPath = "C:\\Users\\ekkob\\OneDrive\\Máy tính\\AndroSign\\sample.xfdf";
+
+            var result = await _Cer.mergeXFDF(pdfPath, xfdfPath);
+            return Ok(result);
+        }
     }
 }
