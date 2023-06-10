@@ -18,6 +18,12 @@ namespace Cer.Controllers
             _Cer = new Certificate(configuration);
         }
 
+        [HttpGet("")]
+        public async Task<IActionResult> Index()
+        {
+            return Ok("Cer Ok");
+        }
+
         // GET api/<ValuesController>/5
         [HttpGet("CreateSelfCA")]
         public async Task<IActionResult> CreateSelfCA([FromQuery] string sParams)
