@@ -40,6 +40,10 @@ namespace Cer.Controllers
             var passWord = "123456";
             var imgPath = "123456";
             var stepNo = 0;
+            pdfPath = "C:\\Users\\admin\\Desktop\\CerFile\\sample.pdf";
+            sXfdf = "C:\\Users\\admin\\Desktop\\CerFile\\sample.xfdf";
+            pfxPath = "C:\\Users\\admin\\Desktop\\CerFile\\nbuubuu.pfx";
+            imgPath = "C:\\Users\\admin\\Desktop\\CerFile\\nbuubuu.png";
             var result = await _Cer.signPdf(pdfPath, sXfdf, pfxPath, passWord, imgPath, stepNo);
             return Ok(result);
         }
@@ -49,16 +53,6 @@ namespace Cer.Controllers
         {
             var docStream = System.IO.File.ReadAllBytes(filePath);
             var result = await _Cer.UploadFile(docStream, fileName);
-            return Ok(result);
-        }
-
-        [HttpPost("MergePdf")]
-        public async Task<IActionResult> MergePdf(/*[FromQuery] string pdfPath, [FromQuery] string xfdfPath*/)
-        { 
-            var pdfPath = "C:\\Users\\ekkob\\OneDrive\\Máy tính\\AndroSign\\sample.pdf";
-            var xfdfPath = "C:\\Users\\ekkob\\OneDrive\\Máy tính\\AndroSign\\sample.xfdf";
-
-            var result = await _Cer.mergeXFDF(pdfPath, xfdfPath);
             return Ok(result);
         }
     }
