@@ -42,7 +42,7 @@ namespace Cer.Controllers
             var stepNo = 0;
             pdfPath = "C:\\Users\\admin\\Desktop\\CerFile\\sample.pdf";
             sXfdf = "C:\\Users\\admin\\Desktop\\CerFile\\sample.xfdf";
-            pfxPath = "C:\\Users\\admin\\Desktop\\CerFile\\nbuubuu.pfx";
+            pfxPath = "C:\\Users\\admin\\Desktop\\CerFile\\nnpsy.pfx";
             imgPath = "C:\\Users\\admin\\Desktop\\CerFile\\nbuubuu.png";
             var result = await _Cer.signPdf(pdfPath, sXfdf, pfxPath, passWord, imgPath, stepNo);
             return Ok(result);

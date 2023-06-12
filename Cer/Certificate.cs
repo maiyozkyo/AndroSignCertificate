@@ -157,28 +157,43 @@ namespace Cer
             imgStream.Close();
             #endregion
 
+            #region Signature Properties
             PdfLoadedSignatureField field = pdfDoc.Form.Fields[0] as PdfLoadedSignatureField;
             //Create a signature with loaded digital ID.
-            #region Signature Properties
             field.Signature = new Syncfusion.Pdf.Security.PdfSignature(pdfDoc, field.Page, certificate, "DigitalSignature", field);
             field.Signature.Settings.CryptographicStandard = CryptographicStandard.CADES;
             field.Signature.ContactInfo = _configuration.GetSection("AppName").Value;
             field.Signature.Appearance.Normal.Graphics.DrawImage(signatureImage, new PointF(0, 0), field.Signature.Bounds.Size);
             field.Signature.Settings.DigestAlgorithm = DigestAlgorithm.SHA256;
             //This property enables the author or certifying signature.
-            field.Signature.Certificated = true;
+            //field.Signature.Certificated = true;
             field.Signature.DocumentPermissions = PdfCertificationFlags.ForbidChanges;
-            field.Signature.IsLocked = true;
-            field.Form.ReadOnly = true;
             #endregion
             #endregion
+
+            var tmpStream = new MemoryStream();
+            pdfDoc.Save(tmpStream);
+            pdfDoc.Close(true);
+            tmpStream.Position = 0;
+            var signedDoc = new PdfLoadedDocument(tmpStream);
+            PdfLoadedSignatureField field1 = signedDoc.Form.Fields[1] as PdfLoadedSignatureField;
+            //Create a signature with loaded digital ID.
+            field1.Signature = new Syncfusion.Pdf.Security.PdfSignature(signedDoc, field1.Page, certificate, "DigitalSignature", field1);
+            field1.Signature.Settings.CryptographicStandard = CryptographicStandard.CADES;
+            field1.Signature.ContactInfo = _configuration.GetSection("AppName").Value;
+            field1.Signature.Appearance.Normal.Graphics.DrawImage(signatureImage, new PointF(0, 0), field1.Signature.Bounds.Size);
+            field1.Signature.Settings.DigestAlgorithm = DigestAlgorithm.SHA256;
+            //This property enables the author or certifying signature.
+            //field1.Signature.Certificated = true;
+            field1.Signature.DocumentPermissions = PdfCertificationFlags.ForbidChanges;
+
 
             #region Sign Result
             MemoryStream signedStream = new MemoryStream();
             //Save the document into stream.
-            pdfDoc.Save(signedStream);
+            signedDoc.Save(signedStream);
             signedStream.Position = 0;
-            File.WriteAllBytes(pdfPath.Replace("sample.pdf", "signed.pdf"), signedStream.ToArray());
+            File.WriteAllBytes(pdfPath.Replace(".pdf", "_signed.pdf"), signedStream.ToArray());
             //Close the document.
             //xfdfStream.Position = 0;
             doc = new PDFDoc(signedStream);
