@@ -175,10 +175,11 @@ namespace Cer
             pdfDoc.Save(tmpStream);
             pdfDoc.Close(true);
             tmpStream.Position = 0;
-            var signedDoc = new PdfLoadedDocument(tmpStream);
-            PdfLoadedSignatureField field1 = signedDoc.Form.Fields[1] as PdfLoadedSignatureField;
+            //var signedDoc = new PdfLoadedDocument(tmpStream);
+            pdfDoc = new PdfLoadedDocument(tmpStream);
+            PdfLoadedSignatureField field1 = pdfDoc.Form.Fields[1] as PdfLoadedSignatureField;
             //Create a signature with loaded digital ID.
-            field1.Signature = new Syncfusion.Pdf.Security.PdfSignature(signedDoc, field1.Page, certificate, "DigitalSignature", field1);
+            field1.Signature = new Syncfusion.Pdf.Security.PdfSignature(pdfDoc, field1.Page, certificate, "DigitalSignature", field1);
             field1.Signature.Settings.CryptographicStandard = CryptographicStandard.CADES;
             field1.Signature.ContactInfo = _configuration.GetSection("AppName").Value;
             field1.Signature.Appearance.Normal.Graphics.DrawImage(signatureImage, new PointF(0, 0), field1.Signature.Bounds.Size);
@@ -191,7 +192,7 @@ namespace Cer
             #region Sign Result
             MemoryStream signedStream = new MemoryStream();
             //Save the document into stream.
-            signedDoc.Save(signedStream);
+            pdfDoc.Save(signedStream);
             signedStream.Position = 0;
             File.WriteAllBytes(pdfPath.Replace(".pdf", "_signed.pdf"), signedStream.ToArray());
             //Close the document.
