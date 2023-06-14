@@ -14,6 +14,7 @@ using Microsoft.OpenApi.Any;
 using System.Text.Json;
 using Cer.Model;
 using MongoDB.Bson;
+using Syncfusion.Pdf;
 
 namespace Cer
 {
@@ -119,8 +120,8 @@ namespace Cer
             {
                 return "";
             }
+            File.WriteAllBytes(@"C:\Users\nhbuu\Desktop\test\origin.pdf", pdfBytes);
 
-            # region PdfTron
 
 
             XmlDocument xml = new XmlDocument();
@@ -149,12 +150,11 @@ namespace Cer
                     lstSignerField.Add(widget);
                 }
             }
-            #endregion
 
             #region Syncfusion
             Syncfusion.Licensing.SyncfusionLicenseProvider.RegisterLicense(SyncFusionLicense);
-            PdfLoadedDocument pdfDoc = new PdfLoadedDocument(pdfBytes);
-           
+            var pdfDoc = new PdfLoadedDocument(pdfBytes);
+
             #region Certificate Authencation
             var cerBytes = await DownloadFile(pfxPath);
             var cerStream = new MemoryStream(cerBytes);
@@ -168,14 +168,13 @@ namespace Cer
             var signatureImage = PdfBitmap.FromStream(imgStream);
             imgStream.Close();
             #endregion
-            var tmpStream = new MemoryStream();
 
             foreach (var widget in lstSignerField)
             {
                 #region Signature Properties
                 //Create a signature with loaded digital ID.
 
-                PdfSignature signature = new PdfSignature(pdfDoc, pdfDoc.Pages[widget.page], certificate, "DigitalSignature");
+                PdfSignature signature = new PdfSignature(pdfDoc, pdfDoc.Pages[widget.page], certificate, pfxPath);
                 signature.Settings.CryptographicStandard = CryptographicStandard.CADES;
                 signature.ContactInfo = _configuration.GetSection("AppName").Value;
                 signature.Bounds = new RectangleF(widget.rect.x1, widget.rect.y1, -widget.rect.x1 + widget.rect.x2, -widget.rect.y1 + widget.rect.y2);
@@ -183,14 +182,22 @@ namespace Cer
                 signature.Appearance.Normal.Graphics.DrawImage(signatureImage, new PointF(0, 0), signature.Bounds.Size);
                 signature.Settings.DigestAlgorithm = DigestAlgorithm.SHA256;
                 //This property enables the author or certifying signature.
-                //signature.Certificated = true;
                 signature.DocumentPermissions = PdfCertificationFlags.ForbidChanges;
                 #endregion
+                if ((pdfDoc.FileStructure.Version == PdfVersion.Version1_0 || pdfDoc.FileStructure.Version == PdfVersion.Version1_1 || pdfDoc.FileStructure.Version == PdfVersion.Version1_2 || pdfDoc.FileStructure.Version == PdfVersion.Version1_3))
+                {
+                    pdfDoc.FileStructure.Version = PdfVersion.Version1_4;
+                    pdfDoc.FileStructure.IncrementalUpdate = false;
+                }
 
-                pdfDoc.Save(tmpStream);
-                pdfDoc.Close(true);
-                tmpStream.Position = 0;
-                pdfDoc = new PdfLoadedDocument(tmpStream);
+                if (lstSignerField.Count > 1)
+                {
+                    var tmpStream = new MemoryStream();
+                    pdfDoc.Save(tmpStream);
+                    pdfDoc.Close(true);
+                    tmpStream.Position = 0;
+                    pdfDoc = new PdfLoadedDocument(tmpStream);
+                }
             }
             #endregion
 
@@ -199,7 +206,8 @@ namespace Cer
             //Save the document into stream.
             pdfDoc.Save(signedStream);
             signedStream.Position = 0;
-            //Close the document.
+
+            # region PdfTron
             //xfdfStream.Position = 0;
             //pdftron.PDFNet.Initialize(PdfTronLicense);
             //PDFDoc doc = new PDFDoc(pdfBytes, pdfBytes.Length);
@@ -207,11 +215,12 @@ namespace Cer
 
             //var xfdfDoc = doc.FDFExtract(PDFDoc.ExtractFlag.e_both);
             //var xfdfString = xfdfDoc.SaveAsXFDF();
+            #endregion
 
             var signedBytes = signedStream.ToArray();
             pdfPath = pdfPath.Replace(".pdf", "_signed.pdf");
             var result = await UploadFile(signedBytes, pdfPath);
-            File.WriteAllBytes(@"C:\\Users\\admin\\Desktop\\CerFile\\" + pdfPath, signedBytes);
+            File.WriteAllBytes(@"C:\Users\nhbuu\Desktop\test\" + pdfPath, signedBytes);
             pdfDoc.Close(true);
             signedStream.Close();
             if (result)
