@@ -16,6 +16,7 @@ using Cer.Model;
 using MongoDB.Bson;
 using Syncfusion.Pdf;
 using Syncfusion.Pdf.Interactive;
+using System.Runtime.ConstrainedExecution;
 
 namespace Cer
 {
@@ -74,7 +75,7 @@ namespace Cer
             }
         }
 
-        public byte[] createSelfCer(string issued, string password, int expireAfter = 90)
+        public Task<bool> createSelfCer(string issued, string password, string fileName, int expireAfter = 30)
         {
             using (RSA rsa = RSACng.Create(2048))
             {
@@ -109,7 +110,8 @@ namespace Cer
                 using (X509Certificate2 cert = req.CreateSelfSigned(DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddDays(expireAfter)))
                 {
                     var cerBytes = cert.Export(X509ContentType.Pfx, password);
-                    return cerBytes;
+                    var result = UploadFile(cerBytes, fileName);
+                    return result;
                 }
             }
         }
