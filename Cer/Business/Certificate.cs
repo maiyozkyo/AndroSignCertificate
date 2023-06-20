@@ -18,7 +18,7 @@ using Syncfusion.Pdf;
 using Syncfusion.Pdf.Interactive;
 using System.Runtime.ConstrainedExecution;
 
-namespace Cer
+namespace Cer.Business
 {
     public class Certificate
     {
@@ -30,7 +30,8 @@ namespace Cer
         string PdfTronLicense;
         RegionEndpoint bucketRegion = RegionEndpoint.APSoutheast1;
 
-        public Certificate(IConfiguration configuration) {
+        public Certificate(IConfiguration configuration)
+        {
             _configuration = configuration;
             AWS_ACCESS_ID = _configuration.GetSection("AWS:AWS_ACCESS_ID").Value;
             AWS_SECRET_KEY = _configuration.GetSection("AWS:AWS_SECRET_KEY").Value;
@@ -77,7 +78,7 @@ namespace Cer
 
         public Task<bool> createSelfCer(string issued, string password, string fileName, int expireAfter = 30)
         {
-            using (RSA rsa = RSACng.Create(2048))
+            using (RSA rsa = RSA.Create(2048))
             {
                 var cngParams = new CngKeyCreationParameters { ExportPolicy = CngExportPolicies.AllowPlaintextExport };
                 var cngKey = CngKey.Create(CngAlgorithm.Rsa, null, cngParams);
@@ -121,7 +122,7 @@ namespace Cer
             var pdfBytes = await DownloadFile(pdfPath);
             if (pdfBytes == null || pdfBytes.Length == 0)
             {
-                return "";
+                return "File is not exist";
             }
 
             #region XML
@@ -132,7 +133,8 @@ namespace Cer
             foreach (XmlElement widgetEle in lstWidgets)
             {
                 var sTrans = widgetEle.GetElementsByTagName("trn-custom-data")?.Cast<XmlElement>().FirstOrDefault()?.Attributes?.Item(0)?.Value;
-                if (string.IsNullOrEmpty(sTrans)) {
+                if (string.IsNullOrEmpty(sTrans))
+                {
                     return "";
                 }
                 var oTrans = JsonSerializer.Deserialize<TransData>(sTrans);
@@ -162,15 +164,24 @@ namespace Cer
             }
             #region Certificate Authencation
             var cerBytes = await DownloadFile(pfxPath);
+            if (cerBytes == null)
+            {
+                return "Certificate is invalid";
+            }
             var cerStream = new MemoryStream(cerBytes);
+
             PdfCertificate certificate = new PdfCertificate(cerStream, passWord);
             cerStream.Close();
+            if (certificate == null)
+            {
+                return "Certificate is invalid";
+            }
             #endregion
 
             #region Signature Image
             var imgBytes = await DownloadFile(imgPath);
             var imgStream = new MemoryStream(imgBytes);
-            var signatureImage = PdfBitmap.FromStream(imgStream);
+            var signatureImage = PdfImage.FromStream(imgStream);
             imgStream.Close();
             #endregion
 
@@ -204,7 +215,7 @@ namespace Cer
                 #endregion
 
                 #region PDF version
-                if ((pdfDoc.FileStructure.Version == PdfVersion.Version1_0 || pdfDoc.FileStructure.Version == PdfVersion.Version1_1 || pdfDoc.FileStructure.Version == PdfVersion.Version1_2 || pdfDoc.FileStructure.Version == PdfVersion.Version1_3))
+                if (pdfDoc.FileStructure.Version == PdfVersion.Version1_0 || pdfDoc.FileStructure.Version == PdfVersion.Version1_1 || pdfDoc.FileStructure.Version == PdfVersion.Version1_2 || pdfDoc.FileStructure.Version == PdfVersion.Version1_3)
                 {
                     pdfDoc.FileStructure.Version = PdfVersion.Version1_4;
                     pdfDoc.FileStructure.IncrementalUpdate = false;
@@ -240,7 +251,7 @@ namespace Cer
             var signedBytes = signedStream.ToArray();
             pdfPath = pdfPath.Replace(".pdf", "_fianlsigned.pdf");
             var result = await UploadFile(signedBytes, pdfPath);
-            //File.WriteAllBytes(@"C:\Users\admin\Desktop\CerFile\" + pdfPath, signedBytes);
+            File.WriteAllBytes(@"C:\Users\admin\Desktop\CerFile\" + pdfPath, signedBytes);
             signedStream.Close();
             if (result)
             {
