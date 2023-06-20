@@ -11,27 +11,39 @@ namespace Cer
         public Security(IConfiguration configuration)
         {
             _configuration = configuration;
-            AppKey = _configuration.GetSection("AWS:AppKey").Value;
+            AppKey = _configuration.GetSection("AppKey").Value;
         }
 
-        public static async Task<string> EncryptAES(string password)
+        public static string Encrypt(string password)
         {
-            using Aes aes = Aes.Create();
-            aes.Key = Encoding.UTF8.GetBytes(AppKey);
-            aes.IV = Encoding.UTF8.GetBytes(AppKey);
-            using MemoryStream outSteam = new();
-            using CryptoStream cryptoStream = new CryptoStream(outSteam, aes.CreateEncryptor(), CryptoStreamMode.Write);
-            await cryptoStream.WriteAsync(Encoding.UTF8.GetBytes(password));
-            await cryptoStream.FlushAsync();
-            return outSteam.ToArray().ToString();
+            var encryptBytes = Encoding.UTF8.GetBytes(password);
+            return Convert.ToBase64String(encryptBytes);
         }
 
-        public static async Task<string> DecryptAES(string cipher)
+        public static string Decrypt(string cipher)
         {
-            using Aes aes = Aes.Create();
-            aes.Key = Encoding.UTF8.GetBytes(AppKey);
-            aes.IV = Encoding.UTF8.GetBytes(AppKey);
-            return "";
+            var aes = Aes.Create();
+            aes.Key = Encoding.UTF8.GetBytes("4512631236589784");
+            aes.IV = Encoding.UTF8.GetBytes("4512631236589784");
+            aes.Padding = PaddingMode.PKCS7;
+            aes.Mode = CipherMode.CBC;
+            aes.FeedbackSize = 16;
+            var decryptor = aes.CreateDecryptor();
+
+            string password = "";
+            try
+            {
+                var cipherBytes = Convert.FromBase64String(cipher);
+                using var msDecrypt = new MemoryStream(cipherBytes);
+                using CryptoStream csDecrypt = new CryptoStream(msDecrypt, decryptor, CryptoStreamMode.Read);
+                using (var srDecrypt = new StreamReader(csDecrypt))
+                {
+                    password = srDecrypt.ReadToEnd();
+                }
+            }catch (Exception ex) {
+                password = "Password incorrect";
+            }
+            return password;
         }
     }
 }

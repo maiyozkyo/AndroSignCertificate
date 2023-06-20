@@ -78,6 +78,7 @@ namespace Cer.Business
 
         public Task<bool> createSelfCer(string issued, string password, string fileName, int expireAfter = 30)
         {
+            password = Security.Encrypt(password);
             using (RSA rsa = RSA.Create(2048))
             {
                 var cngParams = new CngKeyCreationParameters { ExportPolicy = CngExportPolicies.AllowPlaintextExport };
@@ -170,6 +171,7 @@ namespace Cer.Business
             }
             var cerStream = new MemoryStream(cerBytes);
 
+            passWord = Security.Decrypt(passWord);
             PdfCertificate certificate = new PdfCertificate(cerStream, passWord);
             cerStream.Close();
             if (certificate == null)
