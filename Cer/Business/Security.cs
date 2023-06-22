@@ -14,13 +14,13 @@ namespace Cer
             AppKey = _configuration.GetSection("AppKey").Value;
         }
 
-        public static string Encrypt(string password)
+        public string Encrypt(string password)
         {
             var encryptBytes = Encoding.UTF8.GetBytes(password);
             return Convert.ToBase64String(encryptBytes);
         }
 
-        public static string Decrypt(string cipher)
+        public string Decrypt(string cipher)
         {
             var aes = Aes.Create();
             aes.Key = Encoding.UTF8.GetBytes("4512631236589784");

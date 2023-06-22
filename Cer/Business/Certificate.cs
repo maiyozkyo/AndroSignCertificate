@@ -10,24 +10,23 @@ using Syncfusion.Pdf.Graphics;
 using Syncfusion.Drawing;
 using pdftron.PDF;
 using System.Xml;
-using Microsoft.OpenApi.Any;
 using System.Text.Json;
 using Cer.Model;
-using MongoDB.Bson;
 using Syncfusion.Pdf;
 using Syncfusion.Pdf.Interactive;
-using System.Runtime.ConstrainedExecution;
+using System.Text.RegularExpressions;
 
 namespace Cer.Business
 {
     public class Certificate
     {
         private readonly IConfiguration _configuration;
-        string AWS_ACCESS_ID;
-        string AWS_SECRET_KEY;
-        string AWS_S3_BUCKET;
-        string SyncFusionLicense;
-        string PdfTronLicense;
+        private string AWS_ACCESS_ID;
+        private string AWS_SECRET_KEY;
+        private string AWS_S3_BUCKET;
+        private string SyncFusionLicense;
+        private string PdfTronLicense;
+        private Security Secur;
         RegionEndpoint bucketRegion = RegionEndpoint.APSoutheast1;
 
         public Certificate(IConfiguration configuration)
@@ -38,6 +37,7 @@ namespace Cer.Business
             AWS_S3_BUCKET = _configuration.GetSection("AWS:AWS_S3_BUCKET").Value;
             SyncFusionLicense = _configuration.GetSection("SyncLicense").Value;
             PdfTronLicense = _configuration.GetSection("TronLicense").Value;
+            Secur = new Security(configuration);
         }
 
         public async Task<bool> UploadFile(byte[] fileBytes, string fileName)
@@ -78,7 +78,7 @@ namespace Cer.Business
 
         public Task<bool> createSelfCer(string issued, string password, string fileName, int expireAfter = 30)
         {
-            password = Security.Encrypt(password);
+            password = Secur.Decrypt(password);
             using (RSA rsa = RSA.Create(2048))
             {
                 var cngParams = new CngKeyCreationParameters { ExportPolicy = CngExportPolicies.AllowPlaintextExport };
@@ -146,11 +146,17 @@ namespace Cer.Business
                     widget.page = int.Parse(widgetEle.GetAttribute("page"));
                     widget.field = widgetEle.GetAttribute("field");
                     var rect = widgetEle.GetElementsByTagName("rect").Cast<XmlElement>().FirstOrDefault();
-                    widget.rect = new Model.Rect();
-                    widget.rect.x1 = float.Parse(rect.GetAttribute("x1"));
-                    widget.rect.x2 = float.Parse(rect?.GetAttribute("x2"));
-                    widget.rect.y1 = float.Parse(rect?.GetAttribute("y1"));
-                    widget.rect.y2 = float.Parse(rect?.GetAttribute("y2"));
+                    widget.x1 = float.Parse(rect.GetAttribute("x1"));
+                    widget.x2 = float.Parse(rect?.GetAttribute("x2"));
+                    widget.y1 = float.Parse(rect?.GetAttribute("y1"));
+                    widget.y2 = float.Parse(rect?.GetAttribute("y2"));
+
+                    var imgTag = widgetEle.GetElementsByTagName("Normal").Cast<XmlElement>().FirstOrDefault();
+                    if (imgTag != null)
+                    {
+                        var base64 = Regex.Replace(imgTag.InnerText, @"\t|\n|\r", "").Replace("data:image/png;base64,", "");
+                        widget.imgBytes = System.Convert.FromBase64String(base64);
+                    }
                     lstSignerField.Add(widget);
                 }
             }
@@ -171,27 +177,20 @@ namespace Cer.Business
             }
             var cerStream = new MemoryStream(cerBytes);
 
-            passWord = Security.Decrypt(passWord);
+            passWord = Secur.Decrypt(passWord);
             PdfCertificate certificate = new PdfCertificate(cerStream, passWord);
             cerStream.Close();
-            if (certificate == null)
+            if (certificate == null || certificate.ValidTo.Date < DateTime.UtcNow)
             {
                 return "Certificate is invalid";
             }
-            #endregion
-
-            #region Signature Image
-            var imgBytes = await DownloadFile(imgPath);
-            var imgStream = new MemoryStream(imgBytes);
-            var signatureImage = PdfImage.FromStream(imgStream);
-            imgStream.Close();
             #endregion
 
             #region Add Field into Pdf
             foreach (var widget in lstSignerField)
             {
                 PdfSignatureField field = new PdfSignatureField(pdfDoc.Pages[widget.page], widget.name);
-                field.Bounds = new RectangleF(widget.rect.x1, widget.rect.y1, -widget.rect.x1 + widget.rect.x2, -widget.rect.y1 + widget.rect.y2);
+                field.Bounds = new RectangleF(widget.x1, widget.y1, -widget.x1 + widget.x2, -widget.y1 + widget.y2);
                 pdfDoc.Form.Fields.Add(field);
             }
             var tmpStream = new MemoryStream();
@@ -210,10 +209,20 @@ namespace Cer.Business
                 signature.Settings.CryptographicStandard = CryptographicStandard.CADES;
                 signature.ContactInfo = _configuration.GetSection("AppName").Value;
                 signature.Bounds = field.Bounds;
-                signature.Appearance.Normal.Graphics.DrawImage(signatureImage, new PointF(0, 0), signature.Bounds.Size);
                 signature.Settings.DigestAlgorithm = DigestAlgorithm.SHA256;
                 //This property enables the author or certifying signature.
                 signature.DocumentPermissions = PdfCertificationFlags.ForbidChanges;
+                
+                if (widget.imgBytes != null)
+                {
+                    #region Signature Image
+                    using var imgStream = new MemoryStream(widget.imgBytes);
+                    var signatureImage = PdfImage.FromStream(imgStream);
+                    signature.Appearance.Normal.Graphics.DrawImage(signatureImage, new PointF(0, 0), signature.Bounds.Size);
+                    imgStream.Close();
+                    #endregion
+
+                }
                 #endregion
 
                 #region PDF version
@@ -253,7 +262,7 @@ namespace Cer.Business
             var signedBytes = signedStream.ToArray();
             pdfPath = pdfPath.Replace(".pdf", "_fianlsigned.pdf");
             var result = await UploadFile(signedBytes, pdfPath);
-            File.WriteAllBytes(@"C:\Users\admin\Desktop\CerFile\" + pdfPath, signedBytes);
+            //File.WriteAllBytes(@"C:\Users\admin\Desktop\CerFile\" + pdfPath, signedBytes);
             signedStream.Close();
             if (result)
             {

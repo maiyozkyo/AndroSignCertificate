@@ -26,8 +26,7 @@ namespace Cer.Controllers
         [HttpPost("")]
         public async Task<IActionResult> Index([FromQuery] string cipher)
         {
-            var pt = Security.Decrypt(cipher);
-            return Ok("Cer Ok" + pt);
+            return Ok("Cer Ok");
         }
 
         // GET api/<ValuesController>/5
