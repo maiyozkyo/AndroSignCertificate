@@ -44,7 +44,7 @@ namespace Cer.Controllers
         {
             try
             {
-                var result = await _Cer.signPdf(contract.PdfPath, contract.Xfdf, contract.PfxPath, contract.PassWord, contract.ImgPath, contract.StepNo);
+                var result = await _Cer.signPdf(contract.PdfPath, contract.Xfdf, contract.PfxPath, contract.PassWord, contract.StepNo);
                 return Ok(result);
             }
             catch (Exception ex)

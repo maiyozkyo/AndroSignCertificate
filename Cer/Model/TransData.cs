@@ -1,13 +1,16 @@
 ﻿namespace Cer.Model
 {
     [Serializable]
-    public class SignContract
+    public class TransData
     {
-        public string PdfPath { get; set; }
-        public string PfxPath { get; set; }
-        public string PassWord { get; set; }
-        public string ImgPath { get; set; }
-        public string Xfdf {get; set; }
-        public string StepNo { get; set; }
+        //public TransData(string progress, int step, string user) 
+        //{
+        //    Progress = progress;
+        //    Step = step;
+        //    User = user;
+        //}
+        public string progress { get; set; }
+        public string step { get; set; }
+        public string user { get; set; }
     }
 }

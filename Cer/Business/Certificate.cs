@@ -118,7 +118,7 @@ namespace Cer.Business
             }
         }
 
-        public async Task<string> signPdf(string pdfPath, string sXfdf, string pfxPath, string passWord, string imgPath, string stepNo)
+        public async Task<string> signPdf(string pdfPath, string sXfdf, string pfxPath, string passWord, string stepNo)
         {
             var pdfBytes = await DownloadFile(pdfPath);
             if (pdfBytes == null || pdfBytes.Length == 0)
