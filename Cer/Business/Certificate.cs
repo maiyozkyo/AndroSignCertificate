@@ -20,6 +20,7 @@ using Org.BouncyCastle.Pkcs;
 using Org.BouncyCastle.Crypto.Parameters;
 using iTextSharp.text.pdf;
 using iTextSharp.text.pdf.security;
+using Org.BouncyCastle.Crypto.IO;
 
 namespace Cer.Business
 {
@@ -126,7 +127,7 @@ namespace Cer.Business
         public async Task<string> signPdf(string pdfPath, string sXfdf, string pfxPath, string passWord, string stepNo)
         {
             //var pdfBytes = await DownloadFile(pdfPath);
-            var pdfBytes = File.ReadAllBytes(@"C:\Users\ekkob\OneDrive\Máy tính\AndroSignDoc\sample.pdf");
+            var pdfBytes = File.ReadAllBytes(pdfPath);
             if (pdfBytes == null)
             {
                 return "File is not exist";
@@ -159,8 +160,6 @@ namespace Cer.Business
             ICollection<Org.BouncyCastle.X509.X509Certificate> chain = store.GetCertificateChain(alias).Select(c => c.Certificate).ToList();
 
             var parameters = pk.Key as RsaPrivateCrtKeyParameters;
-
-            var reader = new PdfReader(pdfBytes);
 
             #region XML
             XmlDocument xml = new XmlDocument();
@@ -197,24 +196,49 @@ namespace Cer.Business
                 }
             }
             #endregion
-            var signedStream = new MemoryStream();
-            FileStream fileStreamSigPdf = new FileStream(@"C:\Users\ekkob\OneDrive\Máy tính\AndroSignDoc\itext3.pdf", FileMode.Create);
+            var imgBytes = File.ReadAllBytes(@"C:\Users\admin\Desktop\CerFile\nbuubuu.png");
+            var reader = new PdfReader(pdfBytes);
+            var fieldIdx = 0;
+            var xfdfString = "";
+            while (fieldIdx < lstSignerField.Count)
+            {
+                using (var os = new MemoryStream())
+                {
+                    var field = lstSignerField[fieldIdx];
+                    using (var stamper = PdfStamper.CreateSignature(reader, os, '\0', null, true))
+                    {
+                        var appearance = stamper.SignatureAppearance;
+                        appearance.Reason = "";
+                        var rectangle = new iTextSharp.text.Rectangle(field.x2, field.y2, field.x1, field.y1);
+                        appearance.SignatureGraphic = iTextSharp.text.Image.GetInstance(imgBytes);
+                        appearance.SetVisibleSignature(rectangle, field.page, field.field);
+                        appearance.SignatureRenderingMode = PdfSignatureAppearance.RenderingMode.GRAPHIC;
+                        IExternalSignature pks = new PrivateKeySignature(parameters, DigestAlgorithms.SHA256);
+                        MakeSignature.SignDetached(stamper.SignatureAppearance, pks, chain, null, null, null, 0, CryptoStandard.CMS);
+                    }
+                    var tmpPdfBytes = os.ToArray();
+                    //continue
+                    #region PdfTron
+                    if (fieldIdx == lstSignerField.Count - 1)
+                    {
+                        pdftron.PDFNet.Initialize(PdfTronLicense);
+                        PDFDoc doc = new PDFDoc(tmpPdfBytes, tmpPdfBytes.Length);
+                        var xfdfDoc = doc.FDFExtract(PDFDoc.ExtractFlag.e_both);
+                        xfdfString = xfdfDoc.SaveAsXFDF();
+                    }
+                    #endregion
+                    else
+                    {
+                        reader = new PdfReader(tmpPdfBytes);
+                        File.WriteAllBytes(@"C:\Users\admin\Desktop\CerFile\nbuubuu" + field.name + ".pdf", tmpPdfBytes);
+                    }
+                    //end
+                }
+                fieldIdx++;
+            }
+            reader.Dispose();
+            return xfdfString;
 
-            var imgBytes = File.ReadAllBytes(@"C:\Users\ekkob\OneDrive\Máy tính\AndroSignDoc\nbuubuu.png");
-            var stamper = PdfStamper.CreateSignature(reader, fileStreamSigPdf, '\0', null, true);
-            var field = lstSignerField[0];
-            var appearance = stamper.SignatureAppearance;
-            appearance.Reason = "Утверждено";
-            appearance.SignatureRenderingMode = PdfSignatureAppearance.RenderingMode.GRAPHIC;
-            appearance.Image = iTextSharp.text.Image.GetInstance(imgBytes); 
-            var rectangle = new iTextSharp.text.Rectangle(field.x2, field.y2, field.x1, field.y1);
-            appearance.SetVisibleSignature(rectangle, field.page, field.field);
-            IExternalSignature pks = new PrivateKeySignature(parameters, DigestAlgorithms.SHA256);
-            MakeSignature.SignDetached(appearance, pks, chain, null, null, null, 0, CryptoStandard.CMS);
-
-            fileStreamSigPdf.Close();
-            reader.Close();
-            stamper.Close();
             //foreach (var field in lstSignerField)
             //{
 
