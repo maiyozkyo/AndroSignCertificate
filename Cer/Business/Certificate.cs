@@ -15,6 +15,11 @@ using Cer.Model;
 using Syncfusion.Pdf;
 using Syncfusion.Pdf.Interactive;
 using System.Text.RegularExpressions;
+using pdftron.Crypto;
+using Org.BouncyCastle.Pkcs;
+using Org.BouncyCastle.Crypto.Parameters;
+using iTextSharp.text.pdf;
+using iTextSharp.text.pdf.security;
 
 namespace Cer.Business
 {
@@ -120,11 +125,42 @@ namespace Cer.Business
 
         public async Task<string> signPdf(string pdfPath, string sXfdf, string pfxPath, string passWord, string stepNo)
         {
-            var pdfBytes = await DownloadFile(pdfPath);
-            if (pdfBytes == null || pdfBytes.Length == 0)
+            //var pdfBytes = await DownloadFile(pdfPath);
+            var pdfBytes = File.ReadAllBytes(@"C:\Users\ekkob\OneDrive\Máy tính\AndroSignDoc\sample.pdf");
+            if (pdfBytes == null)
             {
                 return "File is not exist";
             }
+            using var pfdStream = new MemoryStream(pdfBytes);
+
+            var cerBytes = await DownloadFile(pfxPath);
+            if (cerBytes == null)
+            {
+                return "Certificate is not exist";
+            }
+
+            using var pfxStream = new MemoryStream(cerBytes);
+            var store = new Pkcs12Store(pfxStream, passWord.ToArray());
+
+            pfxStream.Close();
+
+            var alias = "";
+
+            // searching for private key
+            foreach (string al in store.Aliases)
+                if (store.IsKeyEntry(al) && store.GetKey(al).Key.IsPrivate)
+                {
+                    alias = al;
+                    break;
+                }
+
+            var pk = store.GetKey(alias);
+
+            ICollection<Org.BouncyCastle.X509.X509Certificate> chain = store.GetCertificateChain(alias).Select(c => c.Certificate).ToList();
+
+            var parameters = pk.Key as RsaPrivateCrtKeyParameters;
+
+            var reader = new PdfReader(pdfBytes);
 
             #region XML
             XmlDocument xml = new XmlDocument();
@@ -161,115 +197,200 @@ namespace Cer.Business
                 }
             }
             #endregion
+            var signedStream = new MemoryStream();
+            FileStream fileStreamSigPdf = new FileStream(@"C:\Users\ekkob\OneDrive\Máy tính\AndroSignDoc\itext3.pdf", FileMode.Create);
 
-            #region Syncfusion
-            Syncfusion.Licensing.SyncfusionLicenseProvider.RegisterLicense(SyncFusionLicense);
-            var pdfDoc = new PdfLoadedDocument(pdfBytes);
-            if (pdfDoc.Form == null)
-            {
-                pdfDoc.CreateForm();
-            }
-            #region Certificate Authencation
-            var cerBytes = await DownloadFile(pfxPath);
-            if (cerBytes == null)
-            {
-                return "Certificate is invalid";
-            }
-            var cerStream = new MemoryStream(cerBytes);
+            var imgBytes = File.ReadAllBytes(@"C:\Users\ekkob\OneDrive\Máy tính\AndroSignDoc\nbuubuu.png");
+            var stamper = PdfStamper.CreateSignature(reader, fileStreamSigPdf, '\0', null, true);
+            var field = lstSignerField[0];
+            var appearance = stamper.SignatureAppearance;
+            appearance.Reason = "Утверждено";
+            appearance.SignatureRenderingMode = PdfSignatureAppearance.RenderingMode.GRAPHIC;
+            appearance.Image = iTextSharp.text.Image.GetInstance(imgBytes); 
+            var rectangle = new iTextSharp.text.Rectangle(field.x2, field.y2, field.x1, field.y1);
+            appearance.SetVisibleSignature(rectangle, field.page, field.field);
+            IExternalSignature pks = new PrivateKeySignature(parameters, DigestAlgorithms.SHA256);
+            MakeSignature.SignDetached(appearance, pks, chain, null, null, null, 0, CryptoStandard.CMS);
 
-            passWord = Secur.Decrypt(passWord);
-            PdfCertificate certificate = new PdfCertificate(cerStream, passWord);
-            cerStream.Close();
-            if (certificate == null || certificate.ValidTo.Date < DateTime.UtcNow)
-            {
-                return "Certificate is invalid";
-            }
-            #endregion
+            fileStreamSigPdf.Close();
+            reader.Close();
+            stamper.Close();
+            //foreach (var field in lstSignerField)
+            //{
 
-            #region Add Field into Pdf
-            foreach (var widget in lstSignerField)
-            {
-                PdfSignatureField field = new PdfSignatureField(pdfDoc.Pages[widget.page], widget.name);
-                field.Bounds = new RectangleF(widget.x1, widget.y1, -widget.x1 + widget.x2, -widget.y1 + widget.y2);
-                pdfDoc.Form.Fields.Add(field);
-            }
-            var tmpStream = new MemoryStream();
-            pdfDoc.Save(tmpStream);
-            pdfDoc.Close(true);
-            pdfDoc = new PdfLoadedDocument(tmpStream);
-            #endregion
+            //    var signedStream = new MemoryStream();
+            //    var stamper = PdfStamper.CreateSignature(reader, signedStream, '\0', null, true);
 
-            foreach (var widget in lstSignerField)
-            {
-                #region Signature Properties
-                //Create a signature with loaded digital ID.
-                var field = pdfDoc.Form.Fields[widget.name] as PdfLoadedSignatureField;
-                PdfSignature signature = new PdfSignature(pdfDoc, pdfDoc.Pages[widget.page], certificate, pfxPath, field);
-                signature.SignedName = pfxPath;
-                signature.Settings.CryptographicStandard = CryptographicStandard.CADES;
-                signature.ContactInfo = _configuration.GetSection("AppName").Value;
-                signature.Bounds = field.Bounds;
-                signature.Settings.DigestAlgorithm = DigestAlgorithm.SHA256;
-                //This property enables the author or certifying signature.
-                signature.DocumentPermissions = PdfCertificationFlags.ForbidChanges;
-                
-                if (widget.imgBytes != null)
-                {
-                    #region Signature Image
-                    using var imgStream = new MemoryStream(widget.imgBytes);
-                    var signatureImage = PdfImage.FromStream(imgStream);
-                    signature.Appearance.Normal.Graphics.DrawImage(signatureImage, new PointF(0, 0), signature.Bounds.Size);
-                    imgStream.Close();
-                    #endregion
+            //    var appearance = stamper.SignatureAppearance;
+            //    appearance.Reason = "Test";
 
-                }
-                #endregion
+            //var rect = new iTextSharp.text.Rectangle(field.x2, field.y2, field.x1, field.y1);
+            //appearance.SetVisibleSignature(rect, field.page, field.field);
+            //    IExternalSignature pks = new PrivateKeySignature(parameters, DigestAlgorithms.SHA256);
+            //    MakeSignature.SignDetached(appearance, pks, chain, null, null, null, 0, CryptoStandard.CMS);
+            //    if (signedStream != null)
+            //    {
+            //        stamper.Close();
+            //        signedStream.Position = 0;
+            //        File.WriteAllBytes(@"C:\Users\ekkob\OneDrive\Máy tính\AndroSignDoc\itext.pdf", signedStream.ToArray());
+            //        return "Oke";
+            //    }
 
-                #region PDF version
-                if (pdfDoc.FileStructure.Version == PdfVersion.Version1_0 || pdfDoc.FileStructure.Version == PdfVersion.Version1_1 || pdfDoc.FileStructure.Version == PdfVersion.Version1_2 || pdfDoc.FileStructure.Version == PdfVersion.Version1_3)
-                {
-                    pdfDoc.FileStructure.Version = PdfVersion.Version1_4;
-                    pdfDoc.FileStructure.IncrementalUpdate = false;
-                }
-                #endregion
-                tmpStream = new MemoryStream();
-                if (lstSignerField.Count > 1)
-                {
-                    pdfDoc.Save(tmpStream);
-                    pdfDoc.Close(true);
-                    tmpStream.Position = 0;
-                    pdfDoc = new PdfLoadedDocument(tmpStream);
-                }
-            }
-            #endregion
-
-            #region Sign Result
-            using MemoryStream signedStream = new MemoryStream();
-            //Save the document into stream.
-            pdfDoc.Save(signedStream);
-            pdfDoc.Close(true);
-
-            signedStream.Position = 0;
-
-            # region PdfTron
-            pdftron.PDFNet.Initialize(PdfTronLicense);
-            PDFDoc doc = new PDFDoc(signedStream);
-
-            var xfdfDoc = doc.FDFExtract(PDFDoc.ExtractFlag.e_both);
-            var xfdfString = xfdfDoc.SaveAsXFDF();
-            #endregion
-
-            var signedBytes = signedStream.ToArray();
-            pdfPath = pdfPath.Replace(".pdf", "_fianlsigned.pdf");
-            var result = await UploadFile(signedBytes, pdfPath);
-            //File.WriteAllBytes(@"C:\Users\admin\Desktop\CerFile\" + pdfPath, signedBytes);
-            signedStream.Close();
-            if (result)
-            {
-                return xfdfString;
-            }
-            return "";
-            #endregion
+            //}
+            return "Not ok";
         }
+        //public async Task<string> signPdf(string pdfPath, string sXfdf, string pfxPath, string passWord, string stepNo)
+        //{
+        //    var pdfBytes = await DownloadFile(pdfPath);
+        //    if (pdfBytes == null || pdfBytes.Length == 0)
+        //    {
+        //        return "File is not exist";
+        //    }
+
+        //    #region XML
+        //    XmlDocument xml = new XmlDocument();
+        //    xml.LoadXml(sXfdf);
+        //    var lstWidgets = xml.GetElementsByTagName("widget").Cast<XmlElement>().ToList();
+        //    var lstSignerField = new List<Widget>();
+        //    foreach (XmlElement widgetEle in lstWidgets)
+        //    {
+        //        var sTrans = widgetEle.GetElementsByTagName("trn-custom-data")?.Cast<XmlElement>().FirstOrDefault()?.Attributes?.Item(0)?.Value;
+        //        if (string.IsNullOrEmpty(sTrans))
+        //        {
+        //            return "";
+        //        }
+        //        var oTrans = JsonSerializer.Deserialize<TransData>(sTrans);
+        //        if (oTrans?.step == stepNo)
+        //        {
+        //            var widget = new Widget();
+        //            widget.name = widgetEle.GetAttribute("name");
+        //            widget.page = int.Parse(widgetEle.GetAttribute("page"));
+        //            widget.field = widgetEle.GetAttribute("field");
+        //            var rect = widgetEle.GetElementsByTagName("rect").Cast<XmlElement>().FirstOrDefault();
+        //            widget.x1 = float.Parse(rect.GetAttribute("x1"));
+        //            widget.x2 = float.Parse(rect?.GetAttribute("x2"));
+        //            widget.y1 = float.Parse(rect?.GetAttribute("y1"));
+        //            widget.y2 = float.Parse(rect?.GetAttribute("y2"));
+
+        //            var imgTag = widgetEle.GetElementsByTagName("Normal").Cast<XmlElement>().FirstOrDefault();
+        //            if (imgTag != null)
+        //            {
+        //                var base64 = Regex.Replace(imgTag.InnerText, @"\t|\n|\r", "").Replace("data:image/png;base64,", "");
+        //                widget.imgBytes = System.Convert.FromBase64String(base64);
+        //            }
+        //            lstSignerField.Add(widget);
+        //        }
+        //    }
+        //    #endregion
+
+        //    #region Syncfusion
+        //    Syncfusion.Licensing.SyncfusionLicenseProvider.RegisterLicense(SyncFusionLicense);
+        //    var pdfDoc = new PdfLoadedDocument(pdfBytes);
+        //    if (pdfDoc.Form == null)
+        //    {
+        //        pdfDoc.CreateForm();
+        //    }
+        //    #region Certificate Authencation
+        //    var cerBytes = await DownloadFile(pfxPath);
+        //    if (cerBytes == null)
+        //    {
+        //        return "Certificate is invalid";
+        //    }
+        //    var cerStream = new MemoryStream(cerBytes);
+
+        //    passWord = Secur.Decrypt(passWord);
+        //    PdfCertificate certificate = new PdfCertificate(cerStream, passWord);
+        //    cerStream.Close();
+        //    if (certificate == null || certificate.ValidTo.Date < DateTime.UtcNow)
+        //    {
+        //        return "Certificate is invalid";
+        //    }
+        //    #endregion
+
+        //    #region Add Field into Pdf
+        //    foreach (var widget in lstSignerField)
+        //    {
+        //        PdfSignatureField field = new PdfSignatureField(pdfDoc.Pages[widget.page], widget.name);
+        //        field.Bounds = new RectangleF(widget.x1, widget.y1, -widget.x1 + widget.x2, -widget.y1 + widget.y2);
+        //        pdfDoc.Form.Fields.Add(field);
+        //    }
+        //    var tmpStream = new MemoryStream();
+        //    pdfDoc.Save(tmpStream);
+        //    pdfDoc.Close(true);
+        //    pdfDoc = new PdfLoadedDocument(tmpStream);
+        //    #endregion
+
+        //    foreach (var widget in lstSignerField)
+        //    {
+        //        #region Signature Properties
+        //        //Create a signature with loaded digital ID.
+        //        var field = pdfDoc.Form.Fields[widget.name] as PdfLoadedSignatureField;
+        //        PdfSignature signature = new PdfSignature(pdfDoc, pdfDoc.Pages[widget.page], certificate, pfxPath, field);
+        //        signature.SignedName = pfxPath;
+        //        signature.Settings.CryptographicStandard = CryptographicStandard.CADES;
+        //        signature.ContactInfo = _configuration.GetSection("AppName").Value;
+        //        signature.Bounds = field.Bounds;
+        //        signature.Settings.DigestAlgorithm = DigestAlgorithm.SHA256;
+        //        //This property enables the author or certifying signature.
+        //        signature.DocumentPermissions = PdfCertificationFlags.ForbidChanges;
+                
+        //        if (widget.imgBytes != null)
+        //        {
+        //            #region Signature Image
+        //            using var imgStream = new MemoryStream(widget.imgBytes);
+        //            var signatureImage = PdfImage.FromStream(imgStream);
+        //            signature.Appearance.Normal.Graphics.DrawImage(signatureImage, new PointF(0, 0), signature.Bounds.Size);
+        //            imgStream.Close();
+        //            #endregion
+
+        //        }
+        //        #endregion
+
+        //        #region PDF version
+        //        if (pdfDoc.FileStructure.Version == PdfVersion.Version1_0 || pdfDoc.FileStructure.Version == PdfVersion.Version1_1 || pdfDoc.FileStructure.Version == PdfVersion.Version1_2 || pdfDoc.FileStructure.Version == PdfVersion.Version1_3)
+        //        {
+        //            pdfDoc.FileStructure.Version = PdfVersion.Version1_4;
+        //            pdfDoc.FileStructure.IncrementalUpdate = false;
+        //        }
+        //        #endregion
+        //        tmpStream = new MemoryStream();
+        //        if (lstSignerField.Count > 1)
+        //        {
+        //            pdfDoc.Save(tmpStream);
+        //            pdfDoc.Close(true);
+        //            tmpStream.Position = 0;
+        //            pdfDoc = new PdfLoadedDocument(tmpStream);
+        //        }
+        //    }
+        //    #endregion
+
+        //    #region Sign Result
+        //    using MemoryStream signedStream = new MemoryStream();
+        //    //Save the document into stream.
+        //    pdfDoc.Save(signedStream);
+        //    pdfDoc.Close(true);
+
+        //    signedStream.Position = 0;
+
+        //    # region PdfTron
+        //    pdftron.PDFNet.Initialize(PdfTronLicense);
+        //    PDFDoc doc = new PDFDoc(signedStream);
+
+        //    var xfdfDoc = doc.FDFExtract(PDFDoc.ExtractFlag.e_both);
+        //    var xfdfString = xfdfDoc.SaveAsXFDF();
+        //    #endregion
+
+        //    var signedBytes = signedStream.ToArray();
+        //    pdfPath = pdfPath.Replace(".pdf", "_fianlsigned.pdf");
+        //    var result = await UploadFile(signedBytes, pdfPath);
+        //    //File.WriteAllBytes(@"C:\Users\admin\Desktop\CerFile\" + pdfPath, signedBytes);
+        //    signedStream.Close();
+        //    if (result)
+        //    {
+        //        return xfdfString;
+        //    }
+        //    return "";
+        //    #endregion
+        //}
     }
 }
