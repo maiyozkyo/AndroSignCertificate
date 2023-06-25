@@ -196,7 +196,6 @@ namespace Cer.Business
                 }
             }
             #endregion
-            var imgBytes = File.ReadAllBytes(@"C:\Users\admin\Desktop\CerFile\nbuubuu.png");
             var reader = new PdfReader(pdfBytes);
             var fieldIdx = 0;
             var xfdfString = "";
@@ -210,9 +209,16 @@ namespace Cer.Business
                         var appearance = stamper.SignatureAppearance;
                         appearance.Reason = "";
                         var rectangle = new iTextSharp.text.Rectangle(field.x2, field.y2, field.x1, field.y1);
-                        appearance.SignatureGraphic = iTextSharp.text.Image.GetInstance(imgBytes);
                         appearance.SetVisibleSignature(rectangle, field.page, field.field);
-                        appearance.SignatureRenderingMode = PdfSignatureAppearance.RenderingMode.GRAPHIC;
+                        if (field.imgBytes != null)
+                        {
+                            appearance.SignatureGraphic = iTextSharp.text.Image.GetInstance(field.imgBytes);
+                            appearance.SignatureRenderingMode = PdfSignatureAppearance.RenderingMode.GRAPHIC;
+                        }
+                        else
+                        {
+                            appearance.SignatureRenderingMode = PdfSignatureAppearance.RenderingMode.DESCRIPTION;
+                        }
                         IExternalSignature pks = new PrivateKeySignature(parameters, DigestAlgorithms.SHA256);
                         MakeSignature.SignDetached(stamper.SignatureAppearance, pks, chain, null, null, null, 0, CryptoStandard.CMS);
                     }
@@ -230,39 +236,16 @@ namespace Cer.Business
                     else
                     {
                         reader = new PdfReader(tmpPdfBytes);
-                        File.WriteAllBytes(@"C:\Users\admin\Desktop\CerFile\nbuubuu" + field.name + ".pdf", tmpPdfBytes);
                     }
+                    //File.WriteAllBytes(@"C:\Users\admin\Desktop\CerFile\nbuubuu" + field.name + ".pdf", tmpPdfBytes);
                     //end
                 }
                 fieldIdx++;
             }
             reader.Dispose();
             return xfdfString;
-
-            //foreach (var field in lstSignerField)
-            //{
-
-            //    var signedStream = new MemoryStream();
-            //    var stamper = PdfStamper.CreateSignature(reader, signedStream, '\0', null, true);
-
-            //    var appearance = stamper.SignatureAppearance;
-            //    appearance.Reason = "Test";
-
-            //var rect = new iTextSharp.text.Rectangle(field.x2, field.y2, field.x1, field.y1);
-            //appearance.SetVisibleSignature(rect, field.page, field.field);
-            //    IExternalSignature pks = new PrivateKeySignature(parameters, DigestAlgorithms.SHA256);
-            //    MakeSignature.SignDetached(appearance, pks, chain, null, null, null, 0, CryptoStandard.CMS);
-            //    if (signedStream != null)
-            //    {
-            //        stamper.Close();
-            //        signedStream.Position = 0;
-            //        File.WriteAllBytes(@"C:\Users\ekkob\OneDrive\Máy tính\AndroSignDoc\itext.pdf", signedStream.ToArray());
-            //        return "Oke";
-            //    }
-
-            //}
-            return "Not ok";
         }
+
         //public async Task<string> signPdf(string pdfPath, string sXfdf, string pfxPath, string passWord, string stepNo)
         //{
         //    var pdfBytes = await DownloadFile(pdfPath);
