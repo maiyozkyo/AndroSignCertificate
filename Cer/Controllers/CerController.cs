@@ -42,7 +42,11 @@ namespace Cer.Controllers
             {
                 //contract.PdfPath = @"C:\Users\admin\Desktop\CerFile\" + contract.PdfPath;
                 var result = await _Cer.signPdf(contract.PdfPath, contract.Xfdf, contract.PfxPath, contract.PassWord, contract.StepNo);
-                return Ok(result);
+                var response = new {
+                    Data = result,
+                    Status = true,
+                };
+                return Ok(response);
             }
             catch (Exception ex)
             {
