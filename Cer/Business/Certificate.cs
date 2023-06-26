@@ -126,8 +126,8 @@ namespace Cer.Business
 
         public async Task<string> signPdf(string pdfPath, string sXfdf, string pfxPath, string passWord, string stepNo)
         {
-            //var pdfBytes = await DownloadFile(pdfPath);
-            var pdfBytes = File.ReadAllBytes(pdfPath);
+            var pdfBytes = await DownloadFile(pdfPath);
+            //var pdfBytes = File.ReadAllBytes(pdfPath);
             if (pdfBytes == null)
             {
                 return "File is not exist";
@@ -198,7 +198,7 @@ namespace Cer.Business
             #endregion
             var reader = new PdfReader(pdfBytes);
             var fieldIdx = 0;
-            var xfdfString = "";
+            var xfdfString = "Error Unknow";
             while (fieldIdx < lstSignerField.Count)
             {
                 using (var os = new MemoryStream())
@@ -227,6 +227,7 @@ namespace Cer.Business
                     #region PdfTron
                     if (fieldIdx == lstSignerField.Count - 1)
                     {
+                        UploadFile(tmpPdfBytes, pdfPath);
                         pdftron.PDFNet.Initialize(PdfTronLicense);
                         PDFDoc doc = new PDFDoc(tmpPdfBytes, tmpPdfBytes.Length);
                         var xfdfDoc = doc.FDFExtract(PDFDoc.ExtractFlag.e_both);
