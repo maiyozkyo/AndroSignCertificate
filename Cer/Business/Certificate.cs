@@ -161,42 +161,48 @@ namespace Cer.Business
             foreach (XmlElement widgetEle in lstWidgets)
             {
                 var sTrans = widgetEle.GetElementsByTagName("trn-custom-data")?.Cast<XmlElement>().FirstOrDefault()?.Attributes?.Item(0)?.Value;
-                if (string.IsNullOrEmpty(sTrans))
+                if (!string.IsNullOrEmpty(sTrans))
                 {
-                    return "";
-                }
-                var oTrans = JsonSerializer.Deserialize<TransData>(sTrans);
-                var fieldID = widgetEle.GetAttribute("field");
-                if (oTrans?.step == stepNo)
-                {
-                    var widget = new Widget();
-                    widget.name = widgetEle.GetAttribute("name");
-                    widget.page = int.Parse(widgetEle.GetAttribute("page"));
-                    widget.field = fieldID;
-                    var rect = widgetEle.GetElementsByTagName("rect").Cast<XmlElement>().FirstOrDefault();
-                    widget.x1 = float.Parse(rect.GetAttribute("x1"));
-                    widget.x2 = float.Parse(rect?.GetAttribute("x2"));
-                    widget.y1 = float.Parse(rect?.GetAttribute("y1"));
-                    widget.y2 = float.Parse(rect?.GetAttribute("y2"));
-
-                    var imgTag = widgetEle.GetElementsByTagName("Normal").Cast<XmlElement>().FirstOrDefault();
-                    if (imgTag != null)
+                    var oTrans = JsonSerializer.Deserialize<TransData>(sTrans);
+                    var fieldID = widgetEle.GetAttribute("field");
+                    if (oTrans?.step == stepNo)
                     {
-                        var base64 = Regex.Replace(imgTag.InnerText, @"\t|\n|\r", "").Replace("data:image/png;base64,", "");
-                        widget.imgBytes = System.Convert.FromBase64String(base64);
+                        var widget = new Widget();
+                        widget.name = widgetEle.GetAttribute("name");
+                        widget.page = int.Parse(widgetEle.GetAttribute("page"));
+                        widget.field = fieldID;
+                        var rect = widgetEle.GetElementsByTagName("rect").Cast<XmlElement>().FirstOrDefault();
+                        widget.x1 = float.Parse(rect.GetAttribute("x1"));
+                        widget.x2 = float.Parse(rect?.GetAttribute("x2"));
+                        widget.y1 = float.Parse(rect?.GetAttribute("y1"));
+                        widget.y2 = float.Parse(rect?.GetAttribute("y2"));
+
+                        var imgTag = widgetEle.GetElementsByTagName("Normal").Cast<XmlElement>().FirstOrDefault();
+                        if (imgTag != null)
+                        {
+                            var base64 = Regex.Replace(imgTag.InnerText, @"\t|\n|\r", "").Replace("data:image/png;base64,", "");
+                            widget.imgBytes = System.Convert.FromBase64String(base64);
+                        }
+                        lstSignerField.Add(widget);
                     }
-                    lstSignerField.Add(widget);
-                }
-                else
-                {
-                    lstUnsignField.Add(widgetEle);
-                    lstUnsignIDs.Add(fieldID);
+                    else if (int.Parse(oTrans?.step) > int.Parse(stepNo))
+                    {
+                        lstUnsignField.Add(widgetEle);
+                        lstUnsignIDs.Add(fieldID);
+                    }
                 }
             }
 
             var lstFFields = xml.GetElementsByTagName("ffield").Cast<XmlElement>().Where(ele => lstUnsignIDs.Contains(ele.GetAttribute("name"))).ToList();
+            var lstField = new List<XmlElement>();
             if (lstFFields != null && lstFFields.Count > 0)
             {
+                foreach (var ff in lstFFields)
+                {
+                    var newField = xml.CreateElement("field");
+                    newField.SetAttribute("name", ff.GetAttribute("name"));
+                    lstField.Add(newField);
+                }
                 lstUnsignField.AddRange(lstFFields);
             }
             #endregion
@@ -237,9 +243,16 @@ namespace Cer.Business
                         var xfdfDoc = doc.FDFExtract(PDFDoc.ExtractFlag.e_both);
                         xfdfString = xfdfDoc.SaveAsXFDF();
                         xml.LoadXml(xfdfString);
-                        foreach(var unsignField in lstUnsignField)
+                        var pdfEle = xml.GetElementsByTagName("pdf-info").Cast<XmlElement>().FirstOrDefault();
+                        var fields = xml.GetElementsByTagName("fields").Cast<XmlElement>().FirstOrDefault();
+
+                        for (var fIdx = 0; fIdx < lstUnsignField.Count; fIdx++)
                         {
-                            xml.DocumentElement.AppendChild(unsignField);
+                            pdfEle.AppendChild(lstUnsignField[fIdx]);
+                            if (fIdx % 2 == 0)
+                            {
+                                fields.AppendChild(lstField[fIdx/2]);
+                            }
                         }
                         xfdfString = xml.OuterXml;
                     }
@@ -248,8 +261,8 @@ namespace Cer.Business
                     {
                         reader = new PdfReader(tmpPdfBytes);
                     }
-                    //File.WriteAllBytes(@"C:\Users\admin\Desktop\CerFile\nbuubuu" + field.name + ".pdf", tmpPdfBytes);
                     //end
+                    //File.WriteAllBytes(@"C:\Users\admin\Desktop\CerFile\nhbuu1.pdf", tmpPdfBytes);
                 }
                 fieldIdx++;
             }
