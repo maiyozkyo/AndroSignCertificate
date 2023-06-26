@@ -1,11 +1,7 @@
 ﻿using Cer.Business;
 using Cer.Model;
 using Microsoft.AspNetCore.Mvc;
-using MongoDB.Bson.IO;
-using Syncfusion.Pdf;
-using Syncfusion.Pdf.Graphics;
-using System.IO;
-using System.Text.Json;
+using System.Net;
 
 // For more information on enabling Web API for empty projects, visit https://go.microsoft.com/fwlink/?LinkID=397860
 
@@ -50,7 +46,7 @@ namespace Cer.Controllers
             }
             catch (Exception ex)
             {
-                return Ok(ex.Message);
+                throw new HttpRequestException(ex.Message, ex, HttpStatusCode.ExpectationFailed);
             }
             //pdfPath = "sample.pdf";
             //pfxPath = "nnpsy.pfx";
