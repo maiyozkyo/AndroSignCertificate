@@ -50,7 +50,14 @@ namespace Cer.Controllers
             }
             catch (Exception ex)
             {
-                throw new HttpRequestException(ex.Message, ex, HttpStatusCode.ExpectationFailed);
+                var fail = new
+                {
+                    Data = "",
+                    Status = false,
+                    Error = ex.Message,
+                };
+                return Ok(fail);
+
             }
             //pdfPath = "sample.pdf";
             //pfxPath = "nnpsy.pfx";

@@ -2,25 +2,17 @@
 using Amazon.S3;
 using Amazon.S3.Model;
 using Amazon.S3.Transfer;
-using Syncfusion.Pdf.Parsing;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
-using Syncfusion.Pdf.Security;
-using Syncfusion.Pdf.Graphics;
-using Syncfusion.Drawing;
 using pdftron.PDF;
 using System.Xml;
 using System.Text.Json;
 using Cer.Model;
-using Syncfusion.Pdf;
-using Syncfusion.Pdf.Interactive;
 using System.Text.RegularExpressions;
-using pdftron.Crypto;
 using Org.BouncyCastle.Pkcs;
 using Org.BouncyCastle.Crypto.Parameters;
 using iTextSharp.text.pdf;
 using iTextSharp.text.pdf.security;
-using Org.BouncyCastle.Crypto.IO;
 
 namespace Cer.Business
 {
@@ -30,7 +22,6 @@ namespace Cer.Business
         private string AWS_ACCESS_ID;
         private string AWS_SECRET_KEY;
         private string AWS_S3_BUCKET;
-        private string SyncFusionLicense;
         private string PdfTronLicense;
         private Security Secur;
         RegionEndpoint bucketRegion = RegionEndpoint.APSoutheast1;
@@ -41,7 +32,6 @@ namespace Cer.Business
             AWS_ACCESS_ID = _configuration.GetSection("AWS:AWS_ACCESS_ID").Value;
             AWS_SECRET_KEY = _configuration.GetSection("AWS:AWS_SECRET_KEY").Value;
             AWS_S3_BUCKET = _configuration.GetSection("AWS:AWS_S3_BUCKET").Value;
-            SyncFusionLicense = _configuration.GetSection("SyncLicense").Value;
             PdfTronLicense = _configuration.GetSection("TronLicense").Value;
             Secur = new Security(configuration);
         }
@@ -166,6 +156,8 @@ namespace Cer.Business
             xml.LoadXml(sXfdf);
             var lstWidgets = xml.GetElementsByTagName("widget").Cast<XmlElement>().ToList();
             var lstSignerField = new List<Widget>();
+            var lstUnsignField = new List<XmlElement>();
+            var lstUnsignIDs = new List<string>();
             foreach (XmlElement widgetEle in lstWidgets)
             {
                 var sTrans = widgetEle.GetElementsByTagName("trn-custom-data")?.Cast<XmlElement>().FirstOrDefault()?.Attributes?.Item(0)?.Value;
@@ -174,12 +166,13 @@ namespace Cer.Business
                     return "";
                 }
                 var oTrans = JsonSerializer.Deserialize<TransData>(sTrans);
+                var fieldID = widgetEle.GetAttribute("field");
                 if (oTrans?.step == stepNo)
                 {
                     var widget = new Widget();
                     widget.name = widgetEle.GetAttribute("name");
                     widget.page = int.Parse(widgetEle.GetAttribute("page"));
-                    widget.field = widgetEle.GetAttribute("field");
+                    widget.field = fieldID;
                     var rect = widgetEle.GetElementsByTagName("rect").Cast<XmlElement>().FirstOrDefault();
                     widget.x1 = float.Parse(rect.GetAttribute("x1"));
                     widget.x2 = float.Parse(rect?.GetAttribute("x2"));
@@ -194,6 +187,17 @@ namespace Cer.Business
                     }
                     lstSignerField.Add(widget);
                 }
+                else
+                {
+                    lstUnsignField.Add(widgetEle);
+                    lstUnsignIDs.Add(fieldID);
+                }
+            }
+
+            var lstFFields = xml.GetElementsByTagName("ffield").Cast<XmlElement>().Where(ele => lstUnsignIDs.Contains(ele.GetAttribute("name"))).ToList();
+            if (lstFFields != null && lstFFields.Count > 0)
+            {
+                lstUnsignField.AddRange(lstFFields);
             }
             #endregion
             var reader = new PdfReader(pdfBytes);
@@ -232,6 +236,12 @@ namespace Cer.Business
                         PDFDoc doc = new PDFDoc(tmpPdfBytes, tmpPdfBytes.Length);
                         var xfdfDoc = doc.FDFExtract(PDFDoc.ExtractFlag.e_both);
                         xfdfString = xfdfDoc.SaveAsXFDF();
+                        xml.LoadXml(xfdfString);
+                        foreach(var unsignField in lstUnsignField)
+                        {
+                            xml.DocumentElement.AppendChild(unsignField);
+                        }
+                        xfdfString = xml.OuterXml;
                     }
                     #endregion
                     else
