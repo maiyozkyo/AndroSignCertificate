@@ -13,6 +13,7 @@ using Org.BouncyCastle.Pkcs;
 using Org.BouncyCastle.Crypto.Parameters;
 using iTextSharp.text.pdf;
 using iTextSharp.text.pdf.security;
+using pdftron.PDF.Annots;
 
 namespace Cer.Business
 {
@@ -116,8 +117,8 @@ namespace Cer.Business
 
         public async Task<string> signPdf(string pdfPath, string sXfdf, string pfxPath, string passWord, string stepNo)
         {
-            var pdfBytes = await DownloadFile(pdfPath);
-            //var pdfBytes = File.ReadAllBytes(pdfPath);
+            //var pdfBytes = await DownloadFile(pdfPath);
+            var pdfBytes = File.ReadAllBytes(pdfPath);
             if (pdfBytes == null)
             {
                 throw new Exception("File is not exist");
@@ -155,8 +156,10 @@ namespace Cer.Business
             XmlDocument xml = new XmlDocument();
             xml.LoadXml(sXfdf);
             var lstWidgets = xml.GetElementsByTagName("widget").Cast<XmlElement>().ToList();
-            var lstSignerField = new List<Widget>();
+            var lstSignerField = new List<Model.Widget>();
+            var lstNextField = new List<Model.Widget>();
             var lstUnsignField = new List<XmlElement>();
+            var lstCustomData = new List<TransData>();
             var lstUnsignIDs = new List<string>();
             foreach (XmlElement widgetEle in lstWidgets)
             {
@@ -165,18 +168,18 @@ namespace Cer.Business
                 {
                     var oTrans = JsonSerializer.Deserialize<TransData>(sTrans);
                     var fieldID = widgetEle.GetAttribute("field");
+                    oTrans.field = fieldID;
+                    var widget = new Model.Widget();
+                    widget.name = widgetEle.GetAttribute("name");
+                    widget.page = int.Parse(widgetEle.GetAttribute("page"));
+                    widget.field = fieldID;
+                    var rect = widgetEle.GetElementsByTagName("rect").Cast<XmlElement>().FirstOrDefault();
+                    widget.x1 = float.Parse(rect.GetAttribute("x1"));
+                    widget.x2 = float.Parse(rect?.GetAttribute("x2"));
+                    widget.y1 = float.Parse(rect?.GetAttribute("y1"));
+                    widget.y2 = float.Parse(rect?.GetAttribute("y2"));
                     if (oTrans?.step == stepNo)
                     {
-                        var widget = new Widget();
-                        widget.name = widgetEle.GetAttribute("name");
-                        widget.page = int.Parse(widgetEle.GetAttribute("page"));
-                        widget.field = fieldID;
-                        var rect = widgetEle.GetElementsByTagName("rect").Cast<XmlElement>().FirstOrDefault();
-                        widget.x1 = float.Parse(rect.GetAttribute("x1"));
-                        widget.x2 = float.Parse(rect?.GetAttribute("x2"));
-                        widget.y1 = float.Parse(rect?.GetAttribute("y1"));
-                        widget.y2 = float.Parse(rect?.GetAttribute("y2"));
-
                         var imgTag = widgetEle.GetElementsByTagName("Normal").Cast<XmlElement>().FirstOrDefault();
                         if (imgTag != null)
                         {
@@ -193,6 +196,8 @@ namespace Cer.Business
                         }
                         lstUnsignField.Add(widgetEle);
                         lstUnsignIDs.Add(fieldID);
+                        lstNextField.Add(widget);
+                        lstCustomData.Add(oTrans);
                     }
                 }
             }
@@ -245,21 +250,39 @@ namespace Cer.Business
                         UploadFile(tmpPdfBytes, pdfPath);
                         pdftron.PDFNet.Initialize(PdfTronLicense);
                         PDFDoc doc = new PDFDoc(tmpPdfBytes, tmpPdfBytes.Length);
+                        //var xfdfDoc = doc.FDFExtract(PDFDoc.ExtractFlag.e_both);
+                        //xfdfString = xfdfDoc.SaveAsXFDF();
+                        //xml.LoadXml(xfdfString);
+                        //test
+                        foreach(var nField in lstNextField)
+                        {
+                            var signF = doc.CreateDigitalSignatureField(nField.field);
+                            var sWidget = SignatureWidget.Create(doc, new Rect(nField.x1, nField.y1, nField.x2, nField.y2), signF);
+                            var curData = lstCustomData.Find(d => d.field == nField.field);
+                            sWidget.SetCustomData("user", curData.user);
+                            sWidget.SetCustomData("step", curData.step);
+                            doc.GetPage(nField.page).AnnotPushBack(sWidget);
+                        }
+
                         var xfdfDoc = doc.FDFExtract(PDFDoc.ExtractFlag.e_both);
                         xfdfString = xfdfDoc.SaveAsXFDF();
-                        xml.LoadXml(xfdfString);
-                        var pdfEle = xml.GetElementsByTagName("pdf-info").Cast<XmlElement>().FirstOrDefault();
-                        var fields = xml.GetElementsByTagName("fields").Cast<XmlElement>().FirstOrDefault();
+                        //var tmpDoc = new PDFDoc(pdfBytes, pdfBytes.Length);
+                        //tmpDoc.MergeXFDF(xfdfString);
+                        //tmpDoc.Save(@"C:\Users\admin\Desktop\CerFile\signed1.pdf", pdftron.SDF.SDFDoc.SaveOptions.e_compatibility);
+                        //#region Done
+                        //var pdfEle = xml.GetElementsByTagName("pdf-info").Cast<XmlElement>().FirstOrDefault();
+                        //var fields = xml.GetElementsByTagName("fields").Cast<XmlElement>().FirstOrDefault();
 
-                        for (var fIdx = 0; fIdx < lstUnsignField.Count; fIdx++)
-                        {
-                            pdfEle.AppendChild(lstUnsignField[fIdx]);
-                            if (fIdx % 2 == 0)
-                            {
-                                fields.AppendChild(lstField[fIdx/2]);
-                            }
-                        }
-                        xfdfString = xml.OuterXml;
+                        //for (var fIdx = 0; fIdx < lstUnsignField.Count; fIdx++)
+                        //{
+                        //    pdfEle.AppendChild(lstUnsignField[fIdx]);
+                        //    if (fIdx % 2 == 0)
+                        //    {
+                        //        fields.AppendChild(lstField[fIdx / 2]);
+                        //    }
+                        //}
+                        //xfdfString = xml.OuterXml;
+                        //#endregion
                     }
                     #endregion
                     else

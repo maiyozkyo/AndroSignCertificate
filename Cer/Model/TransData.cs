@@ -12,5 +12,6 @@
         public string progress { get; set; }
         public string step { get; set; }
         public string user { get; set; }
+        public string field { get; set; }
     }
 }
