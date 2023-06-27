@@ -120,14 +120,14 @@ namespace Cer.Business
             //var pdfBytes = File.ReadAllBytes(pdfPath);
             if (pdfBytes == null)
             {
-                return "File is not exist";
+                throw new Exception("File is not exist");
             }
             using var pfdStream = new MemoryStream(pdfBytes);
 
             var cerBytes = await DownloadFile(pfxPath);
             if (cerBytes == null)
             {
-                return "Certificate is not exist";
+                throw new Exception("Certificate is not exist");
             }
 
             using var pfxStream = new MemoryStream(cerBytes);
@@ -200,6 +200,7 @@ namespace Cer.Business
                 foreach (var ff in lstFFields)
                 {
                     var newField = xml.CreateElement("field");
+                    newField.IsEmpty = false;
                     newField.SetAttribute("name", ff.GetAttribute("name"));
                     lstField.Add(newField);
                 }
