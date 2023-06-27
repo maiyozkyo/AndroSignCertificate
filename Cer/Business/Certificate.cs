@@ -187,6 +187,10 @@ namespace Cer.Business
                     }
                     else if (int.Parse(oTrans?.step) > int.Parse(stepNo))
                     {
+                        if (int.Parse(oTrans.step) == int.Parse(stepNo))
+                        {
+                            widgetEle.SetAttribute("flags", "");
+                        }
                         lstUnsignField.Add(widgetEle);
                         lstUnsignIDs.Add(fieldID);
                     }
@@ -263,7 +267,7 @@ namespace Cer.Business
                         reader = new PdfReader(tmpPdfBytes);
                     }
                     //end
-                    //File.WriteAllBytes(@"C:\Users\admin\Desktop\CerFile\nhbuu1.pdf", tmpPdfBytes);
+                    //File.WriteAllBytes(@"C:\Users\admin\Desktop\CerFile\signed.pdf", tmpPdfBytes);
                 }
                 fieldIdx++;
             }
