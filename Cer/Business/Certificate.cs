@@ -187,7 +187,7 @@ namespace Cer.Business
                     }
                     else if (int.Parse(oTrans?.step) > int.Parse(stepNo))
                     {
-                        if (int.Parse(oTrans.step) == int.Parse(stepNo))
+                        if (int.Parse(oTrans.step) == int.Parse(stepNo) + 1)
                         {
                             widgetEle.SetAttribute("flags", "");
                         }
