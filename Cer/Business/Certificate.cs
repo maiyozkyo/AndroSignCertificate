@@ -117,8 +117,8 @@ namespace Cer.Business
 
         public async Task<string> signPdf(string pdfPath, string sXfdf, string pfxPath, string passWord, string stepNo)
         {
-            //var pdfBytes = await DownloadFile(pdfPath);
-            var pdfBytes = File.ReadAllBytes(pdfPath);
+            var pdfBytes = await DownloadFile(pdfPath);
+            //var pdfBytes = File.ReadAllBytes(pdfPath);
             if (pdfBytes == null)
             {
                 throw new Exception("File is not exist");
@@ -133,7 +133,6 @@ namespace Cer.Business
 
             using var pfxStream = new MemoryStream(cerBytes);
             var store = new Pkcs12Store(pfxStream, passWord.ToArray());
-
             pfxStream.Close();
 
             var alias = "";
@@ -266,9 +265,9 @@ namespace Cer.Business
 
                         var xfdfDoc = doc.FDFExtract(PDFDoc.ExtractFlag.e_both);
                         xfdfString = xfdfDoc.SaveAsXFDF();
-                        //var tmpDoc = new PDFDoc(pdfBytes, pdfBytes.Length);
-                        //tmpDoc.MergeXFDF(xfdfString);
-                        //tmpDoc.Save(@"C:\Users\admin\Desktop\CerFile\signed1.pdf", pdftron.SDF.SDFDoc.SaveOptions.e_compatibility);
+                        var tmpDoc = new PDFDoc(tmpPdfBytes, tmpPdfBytes.Length);
+                        tmpDoc.MergeXFDF(xfdfString);
+                        tmpDoc.Save(@"C:\Users\admin\Desktop\CerFile\signed1.pdf", pdftron.SDF.SDFDoc.SaveOptions.e_compatibility);
                         //#region Done
                         //var pdfEle = xml.GetElementsByTagName("pdf-info").Cast<XmlElement>().FirstOrDefault();
                         //var fields = xml.GetElementsByTagName("fields").Cast<XmlElement>().FirstOrDefault();
