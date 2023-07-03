@@ -27,9 +27,9 @@ namespace Cer.Controllers
 
         // GET api/<ValuesController>/5
         [HttpPost("CreateSelfCA")]
-        public async Task<IActionResult> CreateSelfCA([FromQuery] string issued, [FromQuery] string password, [FromQuery] string fileName, [FromQuery] int expireAfter = 30, [FromQuery] bool isUpdate = false)
+        public async Task<IActionResult> CreateSelfCA([FromQuery] string issued, [FromQuery] string password, [FromQuery] string fileName, [FromQuery] int expireAfter = 30, [FromQuery] bool isUpdate = false, [FromQuery] string newPass = "")
         {
-            string msg = await _Cer.createSelfCer(issued, password, fileName, expireAfter, isUpdate);
+            string msg = await _Cer.createSelfCer(issued, password, fileName, expireAfter, isUpdate, newPass);
             //bool createdResult = true;
             if (string.IsNullOrEmpty(msg))
             {

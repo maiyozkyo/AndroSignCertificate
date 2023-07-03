@@ -73,7 +73,7 @@ namespace Cer.Business
             }
         }
 
-        public async Task<string> createSelfCer(string issued, string password, string fileName, int expireAfter = 30, bool isUpdate = false)
+        public async Task<string> createSelfCer(string issued, string password, string fileName, int expireAfter = 30, bool isUpdate = false, string newPass = "")
         {
             password = Secur.Decrypt(password);
 
@@ -90,6 +90,7 @@ namespace Cer.Business
                     var sEndDate = cert.GetExpirationDateString();
                     startDate = DateTimeOffset.Parse(sStartDate);
                     endDate = DateTimeOffset.Parse(sEndDate);
+                    password = Secur.Decrypt(newPass);
                 }
                 catch (Exception ex)
                 {
