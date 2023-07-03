@@ -131,6 +131,7 @@ namespace Cer.Business
                 throw new Exception("Certificate is not exist");
             }
 
+            passWord = Secur.Decrypt(passWord);
             using var pfxStream = new MemoryStream(cerBytes);
             var store = new Pkcs12Store(pfxStream, passWord.ToArray());
             pfxStream.Close();
