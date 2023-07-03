@@ -286,9 +286,7 @@ namespace Cer.Business
 
                         var xfdfDoc = doc.FDFExtract(PDFDoc.ExtractFlag.e_both);
                         xfdfString = xfdfDoc.SaveAsXFDF();
-                        var tmpDoc = new PDFDoc(tmpPdfBytes, tmpPdfBytes.Length);
-                        tmpDoc.MergeXFDF(xfdfString);
-                        tmpDoc.Save(@"C:\Users\admin\Desktop\CerFile\signed1.pdf", pdftron.SDF.SDFDoc.SaveOptions.e_compatibility);
+                       
                         //#region Done
                         //var pdfEle = xml.GetElementsByTagName("pdf-info").Cast<XmlElement>().FirstOrDefault();
                         //var fields = xml.GetElementsByTagName("fields").Cast<XmlElement>().FirstOrDefault();
