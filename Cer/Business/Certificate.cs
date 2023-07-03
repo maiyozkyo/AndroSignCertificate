@@ -73,9 +73,29 @@ namespace Cer.Business
             }
         }
 
-        public Task<bool> createSelfCer(string issued, string password, string fileName, int expireAfter = 30)
+        public async Task<string> createSelfCer(string issued, string password, string fileName, int expireAfter = 30, bool isUpdate = false)
         {
             password = Secur.Decrypt(password);
+
+            var startDate = DateTimeOffset.UtcNow;
+            var endDate = DateTimeOffset.UtcNow.AddDays(expireAfter);
+            
+            if (isUpdate)
+            {
+                try
+                {
+                    var cerBytes = await DownloadFile(fileName);
+                    X509Certificate cert = new X509Certificate(cerBytes, password);
+                    var sStartDate = cert.GetEffectiveDateString();
+                    var sEndDate = cert.GetExpirationDateString();
+                    startDate = DateTimeOffset.Parse(sStartDate);
+                    endDate = DateTimeOffset.Parse(sEndDate);
+                }
+                catch (Exception ex)
+                {
+                    return ex.Message;
+                }
+            }
             using (RSA rsa = RSA.Create(2048))
             {
                 var cngParams = new CngKeyCreationParameters { ExportPolicy = CngExportPolicies.AllowPlaintextExport };
@@ -106,11 +126,11 @@ namespace Cer.Business
                 req.CertificateExtensions.Add(
                     new X509SubjectKeyIdentifierExtension(req.PublicKey, false));
 
-                using (X509Certificate2 cert = req.CreateSelfSigned(DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddDays(expireAfter)))
+                using (X509Certificate2 cert = req.CreateSelfSigned(startDate, endDate))
                 {
                     var cerBytes = cert.Export(X509ContentType.Pfx, password);
-                    var result = UploadFile(cerBytes, fileName);
-                    return result;
+                    var result = await UploadFile(cerBytes, fileName);
+                    return "";
                 }
             }
         }

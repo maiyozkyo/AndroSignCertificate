@@ -27,12 +27,28 @@ namespace Cer.Controllers
 
         // GET api/<ValuesController>/5
         [HttpPost("CreateSelfCA")]
-        public async Task<IActionResult> CreateSelfCA([FromQuery] string issued, [FromQuery] string password, [FromQuery] string fileName, [FromQuery] int expireAfter = 30)
+        public async Task<IActionResult> CreateSelfCA([FromQuery] string issued, [FromQuery] string password, [FromQuery] string fileName, [FromQuery] int expireAfter = 30, [FromQuery] bool isUpdate = false)
         {
-            bool createdResult = await _Cer.createSelfCer(issued, password, fileName, expireAfter);
+            string msg = await _Cer.createSelfCer(issued, password, fileName, expireAfter, isUpdate);
             //bool createdResult = true;
-
-            return Ok(createdResult);
+            if (string.IsNullOrEmpty(msg))
+            {
+                var response = new
+                {
+                    Data = "Created",
+                    Status = true,
+                };
+                return Ok(response);
+            }
+            else
+            {
+                var response = new
+                {
+                    Data = msg,
+                    Status = false,
+                };
+                return Ok(response);
+            }
         }
 
         [HttpPost("SignPDF")]
