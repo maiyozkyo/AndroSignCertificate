@@ -40,7 +40,6 @@ namespace Cer.Business
         public async Task<bool> UploadFile(byte[] fileBytes, string fileName)
         {
             var s3Client = new AmazonS3Client(AWS_ACCESS_ID, AWS_SECRET_KEY, bucketRegion);
-
             var fileTrans = new TransferUtility(s3Client);
             Stream fs = new MemoryStream(fileBytes);
             var fileTransReq = new TransferUtilityUploadRequest
@@ -58,45 +57,72 @@ namespace Cer.Business
         }
         public async Task<byte[]> DownloadFile(string fileName)
         {
-
-            var s3Client = new AmazonS3Client(AWS_ACCESS_ID, AWS_SECRET_KEY, bucketRegion);
-            var objReq = new GetObjectRequest
+            try
             {
-                BucketName = AWS_S3_BUCKET,
-                Key = fileName,
-            };
-            using (var ms = new MemoryStream())
+                var s3Client = new AmazonS3Client(AWS_ACCESS_ID, AWS_SECRET_KEY, bucketRegion);
+                var objReq = new GetObjectRequest
+                {
+                    BucketName = AWS_S3_BUCKET,
+                    Key = fileName,
+                };
+                using (var ms = new MemoryStream())
+                {
+                    var responseObj = await s3Client.GetObjectAsync(objReq);
+                    await responseObj.ResponseStream.CopyToAsync(ms);
+                    return ms.ToArray();
+                }
+            }
+            catch (Exception ex)
             {
-                var responseObj = await s3Client.GetObjectAsync(objReq);
-                await responseObj.ResponseStream.CopyToAsync(ms);
-                return ms.ToArray();
+                return null;
             }
         }
 
         public async Task<string> createSelfCer(string issued, string password, string fileName, int expireAfter = 30, bool isUpdate = false, string newPass = "")
         {
-            password = Secur.Decrypt(password);
+            fileName = "CAs/" + fileName;
+            try
+            {
+                password = Secur.Decrypt(password);
+            }
+            catch(Exception ex)
+            {
+                throw;
+            }
 
             var startDate = DateTimeOffset.UtcNow;
             var endDate = DateTimeOffset.UtcNow.AddDays(expireAfter);
-            
             if (isUpdate)
             {
+                var cerBytes = await DownloadFile(fileName);
+                if (cerBytes == null)
+                {
+                    throw new Exception("Người dùng chưa có chữ ký số!");
+                }
                 try
                 {
-                    var cerBytes = await DownloadFile(fileName);
                     X509Certificate cert = new X509Certificate(cerBytes, password);
                     var sStartDate = cert.GetEffectiveDateString();
                     var sEndDate = cert.GetExpirationDateString();
                     startDate = DateTimeOffset.Parse(sStartDate);
                     endDate = DateTimeOffset.Parse(sEndDate);
-                    password = Secur.Decrypt(newPass);
                 }
                 catch (Exception ex)
                 {
-                    return ex.Message;
+                    throw;//new Exception("Mật khẩu bảo vệ tài liệu không chính xác!");
+                }
+
+                try
+                {
+                    password = Secur.Decrypt(newPass);
+
+                }
+                catch (Exception ex)
+                {
+                    throw new Exception("Mật khẩu mới không đúng định dạng!");
                 }
             }
+
             using (RSA rsa = RSA.Create(2048))
             {
                 var cngParams = new CngKeyCreationParameters { ExportPolicy = CngExportPolicies.AllowPlaintextExport };
@@ -131,7 +157,7 @@ namespace Cer.Business
                 {
                     var cerBytes = cert.Export(X509ContentType.Pfx, password);
                     var result = await UploadFile(cerBytes, fileName);
-                    return "";
+                    return "Tạo chữ ký số cá nhân thành công";
                 }
             }
         }
@@ -140,23 +166,30 @@ namespace Cer.Business
         {
             pdfPath = "documents/" + pdfPath;
             var pdfBytes = await DownloadFile(pdfPath);
-            //var pdfBytes = File.ReadAllBytes(pdfPath);
             if (pdfBytes == null)
             {
-                throw new Exception("File is not exist");
+                throw new Exception("Tài liệu không tồn tại, vui lòng kiểm tra lại!");
             }
             using var pfdStream = new MemoryStream(pdfBytes);
 
             var cerBytes = await DownloadFile(pfxPath);
             if (cerBytes == null)
             {
-                throw new Exception("Certificate is not exist");
+                throw new Exception("Người dùng chưa đăng ký chữ ký số cá nhân!");
             }
 
-            passWord = Secur.Decrypt(passWord);
-            using var pfxStream = new MemoryStream(cerBytes);
-            var store = new Pkcs12Store(pfxStream, passWord.ToArray());
-            pfxStream.Close();
+            Pkcs12Store store = null;
+            try
+            {
+                passWord = Secur.Decrypt(passWord);
+                using var pfxStream = new MemoryStream(cerBytes);
+                store = new Pkcs12Store(pfxStream, passWord.ToArray());
+                pfxStream.Close();
+            }
+            catch(Exception ex)
+            {
+                throw new Exception("Mật khẩu không chính xác!");
+            }
 
             var alias = "";
 
@@ -241,81 +274,69 @@ namespace Cer.Business
             var reader = new PdfReader(pdfBytes);
             var fieldIdx = 0;
             var xfdfString = "Error Unknow";
-            while (fieldIdx < lstSignerField.Count)
+
+            try
             {
-                using (var os = new MemoryStream())
+                while (fieldIdx < lstSignerField.Count)
                 {
-                    var field = lstSignerField[fieldIdx];
-                    using (var stamper = PdfStamper.CreateSignature(reader, os, '\0', null, true))
+                    using (var os = new MemoryStream())
                     {
-                        var appearance = stamper.SignatureAppearance;
-                        appearance.Reason = "";
-                        var rectangle = new iTextSharp.text.Rectangle(field.x2, field.y2, field.x1, field.y1);
-                        appearance.SetVisibleSignature(rectangle, field.page, field.field);
-                        if (field.imgBytes != null)
+                        var field = lstSignerField[fieldIdx];
+                        using (var stamper = PdfStamper.CreateSignature(reader, os, '\0', null, true))
                         {
-                            appearance.SignatureGraphic = iTextSharp.text.Image.GetInstance(field.imgBytes);
-                            appearance.SignatureRenderingMode = PdfSignatureAppearance.RenderingMode.GRAPHIC;
+                            var appearance = stamper.SignatureAppearance;
+                            appearance.Reason = "";
+                            var rectangle = new iTextSharp.text.Rectangle(field.x2, field.y2, field.x1, field.y1);
+                            appearance.SetVisibleSignature(rectangle, field.page, field.field);
+                            if (field.imgBytes != null)
+                            {
+                                appearance.SignatureGraphic = iTextSharp.text.Image.GetInstance(field.imgBytes);
+                                appearance.SignatureRenderingMode = PdfSignatureAppearance.RenderingMode.GRAPHIC;
+                            }
+                            else
+                            {
+                                appearance.SignatureRenderingMode = PdfSignatureAppearance.RenderingMode.DESCRIPTION;
+                            }
+                            IExternalSignature pks = new PrivateKeySignature(parameters, DigestAlgorithms.SHA256);
+                            MakeSignature.SignDetached(stamper.SignatureAppearance, pks, chain, null, null, null, 0, CryptoStandard.CMS);
                         }
+                        var tmpPdfBytes = os.ToArray();
+                        //continue
+                        #region PdfTron
+                        if (fieldIdx == lstSignerField.Count - 1)
+                        {
+                            UploadFile(tmpPdfBytes, pdfPath);
+                            pdftron.PDFNet.Initialize(PdfTronLicense);
+                            PDFDoc doc = new PDFDoc(tmpPdfBytes, tmpPdfBytes.Length);
+                            foreach (var nField in lstNextField)
+                            {
+                                var signF = doc.CreateDigitalSignatureField(nField.field);
+                                var sWidget = SignatureWidget.Create(doc, new Rect(nField.x1, nField.y1, nField.x2, nField.y2), signF);
+                                var curData = lstCustomData.Find(d => d.field == nField.field);
+                                sWidget.SetCustomData("user", curData.user);
+                                sWidget.SetCustomData("step", curData.step);
+                                doc.GetPage(nField.page).AnnotPushBack(sWidget);
+                            }
+
+                            var xfdfDoc = doc.FDFExtract(PDFDoc.ExtractFlag.e_both);
+                            xfdfString = xfdfDoc.SaveAsXFDF();
+                        }
+                        #endregion
                         else
                         {
-                            appearance.SignatureRenderingMode = PdfSignatureAppearance.RenderingMode.DESCRIPTION;
+                            reader = new PdfReader(tmpPdfBytes);
                         }
-                        IExternalSignature pks = new PrivateKeySignature(parameters, DigestAlgorithms.SHA256);
-                        MakeSignature.SignDetached(stamper.SignatureAppearance, pks, chain, null, null, null, 0, CryptoStandard.CMS);
                     }
-                    var tmpPdfBytes = os.ToArray();
-                    //continue
-                    #region PdfTron
-                    if (fieldIdx == lstSignerField.Count - 1)
-                    {
-                        UploadFile(tmpPdfBytes, pdfPath);
-                        pdftron.PDFNet.Initialize(PdfTronLicense);
-                        PDFDoc doc = new PDFDoc(tmpPdfBytes, tmpPdfBytes.Length);
-                        //var xfdfDoc = doc.FDFExtract(PDFDoc.ExtractFlag.e_both);
-                        //xfdfString = xfdfDoc.SaveAsXFDF();
-                        //xml.LoadXml(xfdfString);
-                        //test
-                        foreach(var nField in lstNextField)
-                        {
-                            var signF = doc.CreateDigitalSignatureField(nField.field);
-                            var sWidget = SignatureWidget.Create(doc, new Rect(nField.x1, nField.y1, nField.x2, nField.y2), signF);
-                            var curData = lstCustomData.Find(d => d.field == nField.field);
-                            sWidget.SetCustomData("user", curData.user);
-                            sWidget.SetCustomData("step", curData.step);
-                            doc.GetPage(nField.page).AnnotPushBack(sWidget);
-                        }
-
-                        var xfdfDoc = doc.FDFExtract(PDFDoc.ExtractFlag.e_both);
-                        xfdfString = xfdfDoc.SaveAsXFDF();
-                       
-                        //#region Done
-                        //var pdfEle = xml.GetElementsByTagName("pdf-info").Cast<XmlElement>().FirstOrDefault();
-                        //var fields = xml.GetElementsByTagName("fields").Cast<XmlElement>().FirstOrDefault();
-
-                        //for (var fIdx = 0; fIdx < lstUnsignField.Count; fIdx++)
-                        //{
-                        //    pdfEle.AppendChild(lstUnsignField[fIdx]);
-                        //    if (fIdx % 2 == 0)
-                        //    {
-                        //        fields.AppendChild(lstField[fIdx / 2]);
-                        //    }
-                        //}
-                        //xfdfString = xml.OuterXml;
-                        //#endregion
-                    }
-                    #endregion
-                    else
-                    {
-                        reader = new PdfReader(tmpPdfBytes);
-                    }
-                    //end
-                    //File.WriteAllBytes(@"C:\Users\admin\Desktop\CerFile\signed.pdf", tmpPdfBytes);
+                    fieldIdx++;
                 }
-                fieldIdx++;
+                reader.Dispose();
+                return xfdfString;
             }
-            reader.Dispose();
-            return xfdfString;
+            catch (Exception ex)
+            {
+                throw new Exception("Tài liệu đã được ký, vui lòng kiểm tra lại!");
+            }
+           
         }
 
         //public async Task<string> signPdf(string pdfPath, string sXfdf, string pfxPath, string passWord, string stepNo)

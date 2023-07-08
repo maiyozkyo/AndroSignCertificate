@@ -41,7 +41,7 @@ namespace Cer
                     password = srDecrypt.ReadToEnd();
                 }
             }catch (Exception ex) {
-                password = "Password incorrect";
+                throw new Exception("Mật khẩu không chính xác!");
             }
             return password;
         }
