@@ -20,7 +20,7 @@ namespace Cer.Controllers
         }
 
         [HttpPost("")]
-        public async Task<IActionResult> Index([FromQuery] string cipher)
+        public async Task<IActionResult> Index()
         {
             return Ok("Cer Ok");
         }
