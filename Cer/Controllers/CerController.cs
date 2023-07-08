@@ -19,8 +19,8 @@ namespace Cer.Controllers
             _Cer = new Certificate(configuration);
         }
 
-        [HttpGet("")]
-        public async Task<IActionResult> Index()
+        [HttpPost("")]
+        public async Task<IActionResult> Index([FromQuery] string cipher)
         {
             return Ok("Cer Ok");
         }
