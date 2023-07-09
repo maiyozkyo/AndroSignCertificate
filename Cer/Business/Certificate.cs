@@ -172,7 +172,7 @@ namespace Cer.Business
             }
             using var pfdStream = new MemoryStream(pdfBytes);
 
-            pfxPath = "CAs/" + pfxPath
+            pfxPath = "CAs/" + pfxPath;
             var cerBytes = await DownloadFile(pfxPath);
             if (cerBytes == null)
             {
