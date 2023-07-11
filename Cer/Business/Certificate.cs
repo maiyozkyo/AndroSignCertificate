@@ -189,6 +189,7 @@ namespace Cer.Business
 
         public async Task<string> signPdf(string pdfPath, string sXfdf, string pfxPath, string passWord, string stepNo)
         {
+            pdfPath = "documents/" + pdfPath;
             var pdfBytes = await DownloadFile(pdfPath);
             if (pdfBytes == null)
             {
@@ -196,6 +197,7 @@ namespace Cer.Business
             }
             using var pfdStream = new MemoryStream(pdfBytes);
 
+            pfxPath = "CAs/" + pfxPath;
             var cerBytes = await DownloadFile(pfxPath);
             if (cerBytes == null)
             {
