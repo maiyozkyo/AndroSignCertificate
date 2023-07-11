@@ -14,6 +14,12 @@ using Org.BouncyCastle.Crypto.Parameters;
 using iTextSharp.text.pdf;
 using iTextSharp.text.pdf.security;
 using pdftron.PDF.Annots;
+using Amazon.Runtime.Internal;
+using static System.Net.Mime.MediaTypeNames;
+using Syncfusion.DocIO.DLS;
+using Syncfusion.DocIO;
+using Syncfusion.DocIORenderer;
+using Syncfusion.XlsIO;
 
 namespace Cer.Business
 {
@@ -24,6 +30,7 @@ namespace Cer.Business
         private string AWS_SECRET_KEY;
         private string AWS_S3_BUCKET;
         private string PdfTronLicense;
+        private string SyncLicense;
         private Security Secur;
         RegionEndpoint bucketRegion = RegionEndpoint.APSoutheast1;
 
@@ -34,6 +41,7 @@ namespace Cer.Business
             AWS_SECRET_KEY = _configuration.GetSection("AWS:AWS_SECRET_KEY").Value;
             AWS_S3_BUCKET = _configuration.GetSection("AWS:AWS_S3_BUCKET").Value;
             PdfTronLicense = _configuration.GetSection("TronLicense").Value;
+            SyncLicense = _configuration.GetSection("SyncLicense").Value;
             Secur = new Security(configuration);
         }
 
@@ -77,7 +85,24 @@ namespace Cer.Business
                 return null;
             }
         }
-
+        public async Task<bool> DeleteFile(string fileName)
+        {
+            try
+            {
+                DeleteObjectRequest delRequest = new DeleteObjectRequest
+                {
+                    BucketName = AWS_S3_BUCKET,
+                    Key = fileName,
+                };
+                var s3Client = new AmazonS3Client(AWS_ACCESS_ID, AWS_SECRET_KEY, bucketRegion);
+                await s3Client.DeleteObjectAsync(delRequest);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                return false;
+            }
+        }
         public async Task<string> createSelfCer(string issued, string password, string fileName, int expireAfter = 30, bool isUpdate = false, string newPass = "")
         {
             fileName = "CAs/" + fileName;
@@ -183,7 +208,16 @@ namespace Cer.Business
                 passWord = Secur.Decrypt(passWord);
                 using var pfxStream = new MemoryStream(cerBytes);
                 store = new Pkcs12Store(pfxStream, passWord.ToArray());
+                X509Certificate cert = new X509Certificate(cerBytes, passWord);
+                var sEndDate = cert.GetExpirationDateString();
+                var endDate = DateTimeOffset.Parse(sEndDate);
+                
                 pfxStream.Close();
+                if (endDate <= DateTime.Now)
+                {
+                    throw new Exception("Chữ ký số hết thời hạn!");
+
+                }
             }
             catch(Exception ex)
             {
@@ -203,7 +237,6 @@ namespace Cer.Business
             var pk = store.GetKey(alias);
 
             ICollection<Org.BouncyCastle.X509.X509Certificate> chain = store.GetCertificateChain(alias).Select(c => c.Certificate).ToList();
-
             var parameters = pk.Key as RsaPrivateCrtKeyParameters;
 
             #region XML
@@ -338,6 +371,146 @@ namespace Cer.Business
            
         }
 
+        private async Task<bool> ToPDFAsyncLogic(string pdfName, string ext)
+        {
+            var bytes = await DownloadFile(pdfName);
+            if (bytes == null) return false;
+
+            ext = ext.ToLower();
+            if (ext.Equals(".pdf")) return true;
+
+            var contents = new MemoryStream(bytes);
+
+            //license
+            Syncfusion.Licensing.SyncfusionLicenseProvider.RegisterLicense(SyncLicense);
+            //
+
+            List<string> wordExt = _configuration.GetSection("SyncLicense").Value.Split(" ").ToList();
+            new List<string> { ".doc", ".docm", ".docx", ".txt" };
+            List<string> excelExt = _configuration.GetSection("SyncLicense").Value.Split(" ").ToList();
+            new List<string> { ".xlsx", ".xlsm", ".xlsb", ".xls" };
+            List<string> imgExt = _configuration.GetSection("SyncLicense").Value.Split(" ").ToList(); 
+            new List<string> { ".bmp", ".jpeg", ".gif", ".png", ".tiff", ".icon", ".ico" };
+            byte[] converted = null;
+
+            if (wordExt.Contains(ext))
+            {
+                //Loads file stream into Word document
+                WordDocument wordDocument;
+                try
+                {
+                    if (ext != ".txt")
+                    {
+                        wordDocument = new WordDocument(contents, Syncfusion.DocIO.FormatType.Automatic);
+                    }
+                    else
+                    {
+                        MemoryStream stream = new MemoryStream();
+                        wordDocument = new WordDocument(contents, Syncfusion.DocIO.FormatType.Txt);
+                        wordDocument.Save(stream, FormatType.Docx);
+                        //wordDocument.Close();
+                        //stream.Flush();
+                        //stream.Position = 0;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    throw new Exception(string.Format("Xảy ra lỗi, không thể chuyển tài liệu {0} thành pdf", ext));
+                }
+
+                DocIORenderer render = new DocIORenderer();
+                render.Settings.ChartRenderingOptions.ImageFormat = Syncfusion.OfficeChart.ExportImageFormat.Jpeg;
+                Syncfusion.Pdf.PdfDocument pdfDocument = render.ConvertToPDF(wordDocument);
+                render.Dispose();
+                wordDocument.Dispose();
+                MemoryStream outputStream = new MemoryStream();
+                pdfDocument.Save(outputStream);
+                pdfDocument.Close();
+
+                converted = outputStream.ToArray();
+                outputStream.Dispose();
+            }
+            else if (excelExt.Contains(ext))
+            {
+                ExcelEngine excelEngine = new ExcelEngine();
+                IApplication application = excelEngine.Excel;
+                IWorkbook workbook = application.Workbooks.Open(contents);
+                workbook.PrecisionAsDisplayed = true;
+                //Initialize XlsIORendererSettings
+                XlsIORendererSettings settings = new XlsIORendererSettings();
+
+                //Enable AutoDetectComplexScript property
+                settings.AutoDetectComplexScript = true;
+
+                //Disable IsConvertBlankPage
+                settings.IsConvertBlankPage = false;
+                settings.IsConvertBlankSheet = false;
+                settings.ExportBookmarks = false;
+                settings.RenderBySheet = false;
+                settings.LayoutOptions = LayoutOptions.Automatic;
+
+                //Initialize XlsIO renderer.
+                XlsIORenderer renderer = new XlsIORenderer();
+
+                //Convert Excel document into PDF document
+                PdfDocument pdfDocument = renderer.ConvertToPDF(workbook, settings);
+                MemoryStream outputStream = new MemoryStream();
+                pdfDocument.Save(outputStream);
+
+                converted = outputStream.ToArray();
+                outputStream.Dispose();
+            }
+            else if (imgExt.Contains(ext))
+            {
+                //Create a new PDF document
+
+                PdfDocument pdfImg = new PdfDocument();
+
+                //Add a page to the document
+
+                PdfPage page = pdfImg.Pages.Add();
+
+                //Create PDF graphics for the page
+
+                PdfGraphics graphics = page.Graphics;
+
+                //Load the image from the disk
+
+                PdfBitmap image = new PdfBitmap(contents);
+                float imgW = image.Width;
+                float imgH = image.Height;
+
+                if (image.Width > page.Size.Width)
+                {
+                    imgW = page.Size.Width;
+                }
+                if (image.Height > page.Size.Height)
+                {
+                    imgH = page.Size.Height;
+                }
+                graphics.DrawImage(image, 0, 0, imgW, imgH);
+
+                //Save the document
+                MemoryStream outputStream = new MemoryStream();
+
+                pdfImg.Save(outputStream);
+                converted = outputStream.ToArray();
+                outputStream.Dispose();
+
+                pdfImg.Close(true);
+
+                //Close the document
+            }
+            if (converted != null)
+            {
+                DeleteFile(pdfName);
+                var update = await UploadFile(converted, pdfName.Replace(ext, ""));
+                return true;
+            }
+
+            throw new Exception(string.Format("Xảy ra lỗi, không thể chuyển tài liệu {0} thành pdf", ext));
+        }
+
         //public async Task<string> signPdf(string pdfPath, string sXfdf, string pfxPath, string passWord, string stepNo)
         //{
         //    var pdfBytes = await DownloadFile(pdfPath);
@@ -432,7 +605,7 @@ namespace Cer.Business
         //        signature.Settings.DigestAlgorithm = DigestAlgorithm.SHA256;
         //        //This property enables the author or certifying signature.
         //        signature.DocumentPermissions = PdfCertificationFlags.ForbidChanges;
-                
+
         //        if (widget.imgBytes != null)
         //        {
         //            #region Signature Image

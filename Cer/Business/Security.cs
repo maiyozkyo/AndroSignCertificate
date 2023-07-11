@@ -16,8 +16,26 @@ namespace Cer
 
         public string Encrypt(string password)
         {
-            var encryptBytes = Encoding.UTF8.GetBytes(password);
-            return Convert.ToBase64String(encryptBytes);
+            var aes = Aes.Create();
+            aes.Key = Encoding.UTF8.GetBytes("4512631236589784");
+            aes.IV = Encoding.UTF8.GetBytes("4512631236589784");
+            aes.Padding = PaddingMode.PKCS7;
+            aes.Mode = CipherMode.CBC;
+            aes.FeedbackSize = 16;
+            var encryptor = aes.CreateEncryptor();
+            using (var msEncrypt = new MemoryStream())
+            {
+                using (var csEncrypt = new CryptoStream(msEncrypt, encryptor, CryptoStreamMode.Write))
+                {
+                    using (var swEncrypt = new StreamWriter(csEncrypt))
+                    {
+                        //Write all data to the stream.
+                        swEncrypt.Write(password);
+                    }
+                    var encrypted = msEncrypt.ToArray();
+                    return Convert.ToBase64String(encrypted);
+                }
+            }
         }
 
         public string Decrypt(string cipher)

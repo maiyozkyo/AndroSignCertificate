@@ -20,9 +20,12 @@ namespace Cer.Controllers
         }
 
         [HttpPost("")]
-        public async Task<IActionResult> Index()
+        public async Task<IActionResult> Index([FromQuery] string pt)
         {
-            return Ok("Cer Ok");
+            var se = new Security(configuration);
+            var en = se.Encrypt(pt);
+            var de = se.Decrypt(en);
+            return Ok(string.Format("Cer Ok {0} {1}", en, de));
         }
 
         // GET api/<ValuesController>/5
