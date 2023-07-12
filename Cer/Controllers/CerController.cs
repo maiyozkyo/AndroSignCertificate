@@ -85,5 +85,39 @@ namespace Cer.Controllers
             var result = await _Cer.UploadFile(docStream, fileName);
             return Ok(result);
         }
+        [HttpGet("ToPdf")]
+        public async Task<IActionResult> ToPDF([FromQuery] string pdfName, [FromQuery] string ext)
+        {
+            try
+            {
+                var result = await _Cer.toPDF(pdfName, ext);
+                if (result)
+                {
+
+                var success = new
+                {
+                    Data = "Chuyển đổi tài liệu thành pdf thành công",
+                    Status = result,
+                    Error = "",
+                };
+                return Ok(success);
+                }
+                    else
+                {
+                    throw new Exception("Lỗi không xác định");
+                }
+
+            }
+            catch (Exception ex)
+            {
+                var fail = new
+                {
+                    Data = "",
+                    Status = false,
+                    Error = ex.Message,
+                };
+                return Ok(fail);
+            }
+        }
     }
 }

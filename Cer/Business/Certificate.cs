@@ -20,6 +20,8 @@ using Syncfusion.DocIO.DLS;
 using Syncfusion.DocIO;
 using Syncfusion.DocIORenderer;
 using Syncfusion.XlsIO;
+using Syncfusion.Pdf.Graphics;
+using Syncfusion.XlsIORenderer;
 
 namespace Cer.Business
 {
@@ -373,7 +375,7 @@ namespace Cer.Business
            
         }
 
-        private async Task<bool> ToPDFAsyncLogic(string pdfName, string ext)
+        public async Task<bool> toPDF(string pdfName, string ext)
         {
             var bytes = await DownloadFile(pdfName);
             if (bytes == null) return false;
@@ -455,7 +457,7 @@ namespace Cer.Business
                 XlsIORenderer renderer = new XlsIORenderer();
 
                 //Convert Excel document into PDF document
-                PdfDocument pdfDocument = renderer.ConvertToPDF(workbook, settings);
+                Syncfusion.Pdf.PdfDocument pdfDocument = renderer.ConvertToPDF(workbook, settings);
                 MemoryStream outputStream = new MemoryStream();
                 pdfDocument.Save(outputStream);
 
@@ -466,11 +468,11 @@ namespace Cer.Business
             {
                 //Create a new PDF document
 
-                PdfDocument pdfImg = new PdfDocument();
+                Syncfusion.Pdf.PdfDocument pdfImg = new Syncfusion.Pdf.PdfDocument();
 
                 //Add a page to the document
 
-                PdfPage page = pdfImg.Pages.Add();
+                Syncfusion.Pdf.PdfPage page = pdfImg.Pages.Add();
 
                 //Create PDF graphics for the page
 
