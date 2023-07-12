@@ -378,7 +378,10 @@ namespace Cer.Business
         public async Task<bool> toPDF(string pdfName, string ext)
         {
             var bytes = await DownloadFile(pdfName);
-            if (bytes == null) return false;
+            if (bytes == null)
+            {
+                throw new Exception("Tài liệu không tồn tại");
+            }
 
             ext = ext.ToLower();
             if (ext.Equals(".pdf")) return true;
@@ -389,12 +392,12 @@ namespace Cer.Business
             Syncfusion.Licensing.SyncfusionLicenseProvider.RegisterLicense(SyncLicense);
             //
 
-            List<string> wordExt = _configuration.GetSection("SyncLicense").Value.Split(" ").ToList();
-            new List<string> { ".doc", ".docm", ".docx", ".txt" };
-            List<string> excelExt = _configuration.GetSection("SyncLicense").Value.Split(" ").ToList();
-            new List<string> { ".xlsx", ".xlsm", ".xlsb", ".xls" };
-            List<string> imgExt = _configuration.GetSection("SyncLicense").Value.Split(" ").ToList(); 
-            new List<string> { ".bmp", ".jpeg", ".gif", ".png", ".tiff", ".icon", ".ico" };
+            //List<string> wordExt = _configuration.GetSection("SyncLicense").Value.Split(" ").ToList();
+            //List<string> excelExt = _configuration.GetSection("SyncLicense").Value.Split(" ").ToList();
+            //List<string> imgExt = _configuration.GetSection("SyncLicense").Value.Split(" ").ToList(); 
+            List<string> wordExt = new List<string> { ".doc", ".docm", ".docx", ".txt" };
+            List<string> excelExt = new List<string> { ".xlsx", ".xlsm", ".xlsb", ".xls" };
+            List<string> imgExt = new List<string> { ".bmp", ".jpeg", ".gif", ".png", ".tiff", ".icon", ".ico" };
             byte[] converted = null;
 
             if (wordExt.Contains(ext))
