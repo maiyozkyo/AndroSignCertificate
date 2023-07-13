@@ -86,11 +86,11 @@ namespace Cer.Controllers
             return Ok(result);
         }
         [HttpGet("ToPdf")]
-        public async Task<IActionResult> ToPDF([FromQuery] string pdfName, [FromQuery] string ext)
+        public async Task<IActionResult> ToPDF([FromQuery] string fullName)
         {
             try
             {
-                var result = await _Cer.toPDF(pdfName, ext);
+                var result = await _Cer.toPDF(fullName);
                 if (result)
                 {
 

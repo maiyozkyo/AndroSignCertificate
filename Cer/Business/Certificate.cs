@@ -375,15 +375,18 @@ namespace Cer.Business
            
         }
 
-        public async Task<bool> toPDF(string pdfName, string ext)
+        public async Task<bool> toPDF(string fullName)
         {
-            var bytes = await DownloadFile(pdfName);
+            var bytes = await DownloadFile(fullName);
             if (bytes == null)
             {
                 throw new Exception("Tài liệu không tồn tại");
             }
 
+            var fileName = Path.GetFileName(fullName);
+            var ext = Path.GetExtension(fullName);
             ext = ext.ToLower();
+
             if (ext.Equals(".pdf")) return true;
 
             var contents = new MemoryStream(bytes);
@@ -510,9 +513,9 @@ namespace Cer.Business
             }
             if (converted != null)
             {
-                DeleteFile(pdfName);
-                var update = await UploadFile(converted, pdfName.Replace(ext, ""));
-                return true;
+                DeleteFile(fullName);
+                var update = await UploadFile(converted, fileName + ".pdf");
+                return update;
             }
 
             throw new Exception(string.Format("Xảy ra lỗi, không thể chuyển tài liệu {0} thành pdf", ext));
