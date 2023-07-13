@@ -378,12 +378,13 @@ namespace Cer.Business
         public async Task<bool> toPDF(string fullName)
         {
             var bytes = await DownloadFile(fullName);
+            //bytes = File.ReadAllBytes("C:\\Users\\admin\\Desktop\\CerFile\\json.txt");
             if (bytes == null)
             {
                 throw new Exception("Tài liệu không tồn tại");
             }
 
-            var fileName = Path.GetFileName(fullName);
+            var fileName = Path.GetFileNameWithoutExtension(fullName);
             var ext = Path.GetExtension(fullName);
             ext = ext.ToLower();
 
