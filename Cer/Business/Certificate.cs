@@ -22,6 +22,9 @@ using Syncfusion.DocIORenderer;
 using Syncfusion.XlsIO;
 using Syncfusion.Pdf.Graphics;
 using Syncfusion.XlsIORenderer;
+using Syncfusion.Pdf.Parsing;
+using Syncfusion.Pdf;
+using Syncfusion.Drawing;
 
 namespace Cer.Business
 {
@@ -44,6 +47,7 @@ namespace Cer.Business
             AWS_S3_BUCKET = _configuration.GetSection("AWS:AWS_S3_BUCKET").Value;
             PdfTronLicense = _configuration.GetSection("TronLicense").Value;
             SyncLicense = _configuration.GetSection("SyncLicense").Value;
+            Syncfusion.Licensing.SyncfusionLicenseProvider.RegisterLicense(SyncLicense);
             Secur = new Security(configuration);
         }
 
@@ -189,10 +193,135 @@ namespace Cer.Business
             }
         }
 
-        public async Task<string> signPdf(string pdfPath, string sXfdf, string pfxPath, string passWord, string stepNo)
+        public async Task<string> signPdfWithImg(string pdfPath, string sXfdf, string pfxPath, string passWord, string stepNo)
         {
             //pdfPath = "documents/" + pdfPath;
             var pdfBytes = await DownloadFile(pdfPath);
+            //var pdfBytes = File.ReadAllBytes(pdfPath);
+            if (pdfBytes == null)
+            {
+                throw new Exception("Tài liệu không tồn tại, vui lòng kiểm tra lại!");
+            }
+
+            #region XML
+            XmlDocument xml = new XmlDocument();
+            xml.LoadXml(sXfdf);
+            var lstWidgets = xml.GetElementsByTagName("widget").Cast<XmlElement>().ToList();
+            var lstSignerField = new List<Model.Widget>();
+            var lstNextField = new List<Model.Widget>();
+            var lstUnsignField = new List<XmlElement>();
+            var lstCustomData = new List<TransData>();
+            var lstUnsignIDs = new List<string>();
+            foreach (XmlElement widgetEle in lstWidgets)
+            {
+                var sTrans = widgetEle.GetElementsByTagName("trn-custom-data")?.Cast<XmlElement>().FirstOrDefault()?.Attributes?.Item(0)?.Value;
+                if (!string.IsNullOrEmpty(sTrans))
+                {
+                    var oTrans = JsonSerializer.Deserialize<TransData>(sTrans);
+                    var fieldID = widgetEle.GetAttribute("field");
+                    oTrans.field = fieldID;
+                    var widget = new Model.Widget();
+                    widget.name = widgetEle.GetAttribute("name");
+                    widget.page = int.Parse(widgetEle.GetAttribute("page"));
+                    widget.field = fieldID;
+                    var rect = widgetEle.GetElementsByTagName("rect").Cast<XmlElement>().FirstOrDefault();
+                    widget.x1 = float.Parse(rect.GetAttribute("x1"));
+                    widget.x2 = float.Parse(rect?.GetAttribute("x2"));
+                    widget.y1 = float.Parse(rect?.GetAttribute("y1"));
+                    widget.y2 = float.Parse(rect?.GetAttribute("y2"));
+                    if (oTrans?.step == stepNo)
+                    {
+                        var imgTag = widgetEle.GetElementsByTagName("Normal").Cast<XmlElement>().FirstOrDefault();
+                        if (imgTag != null)
+                        {
+                            var base64 = Regex.Replace(imgTag.InnerText, @"\t|\n|\r", "").Replace("data:image/png;base64,", "");
+                            widget.imgBytes = System.Convert.FromBase64String(base64);
+                        }
+                        lstSignerField.Add(widget);
+                    }
+                    else if (int.Parse(oTrans?.step) > int.Parse(stepNo))
+                    {
+                        if (int.Parse(oTrans.step) == int.Parse(stepNo) + 1)
+                        {
+                            widgetEle.SetAttribute("flags", "");
+                        }
+                        lstUnsignField.Add(widgetEle);
+                        lstUnsignIDs.Add(fieldID);
+                        lstNextField.Add(widget);
+                        lstCustomData.Add(oTrans);
+                    }
+                }
+            }
+
+            var lstFFields = xml.GetElementsByTagName("ffield").Cast<XmlElement>().Where(ele => lstUnsignIDs.Contains(ele.GetAttribute("name"))).ToList();
+            var lstField = new List<XmlElement>();
+            if (lstFFields != null && lstFFields.Count > 0)
+            {
+                foreach (var ff in lstFFields)
+                {
+                    var newField = xml.CreateElement("field");
+                    newField.IsEmpty = false;
+                    newField.SetAttribute("name", ff.GetAttribute("name"));
+                    lstField.Add(newField);
+                }
+                lstUnsignField.AddRange(lstFFields);
+            }
+            #endregion
+            var fieldIdx = 0;
+            var xfdfString = "Error Unknow";
+
+            PdfLoadedDocument pdfDoc = new PdfLoadedDocument(pdfBytes);
+            try
+            {
+                while (fieldIdx < lstSignerField.Count)
+                {
+                    using (var os = new MemoryStream())
+                    {
+                        var field = lstSignerField[fieldIdx];
+                        #region Add Image
+                        if (field.imgBytes != null)
+                        {
+                            PdfLoadedPage page = pdfDoc.Pages[field.page - 1] as PdfLoadedPage;
+                            PdfGraphics graphics = page.Graphics;
+                            using var imgStream = new MemoryStream(field.imgBytes);
+                            PdfBitmap image = new PdfBitmap(imgStream);
+                            RectangleF imgBounds = new RectangleF(field.x1, field.y1, field.x2 - field.x1, field.y2 - field.y1);
+                            graphics.DrawImage(image, imgBounds);
+                        }
+                        #endregion
+
+                        #region Done by using PdfTron
+                        if (fieldIdx == lstSignerField.Count - 1)
+                        {
+                            pdfDoc.Save(os);
+                            var signedBytes = os.ToArray();
+                            File.WriteAllBytes(pdfPath.Replace(".pdf", "_signed.pdf"), signedBytes);
+                            UploadFile(signedBytes, pdfPath);
+                            pdftron.PDFNet.Initialize(PdfTronLicense);
+                            PDFDoc pdfTronDoc = new PDFDoc(signedBytes, signedBytes.Length);
+                            var xfdfDoc = pdfTronDoc.FDFExtract(PDFDoc.ExtractFlag.e_both);
+                            xfdfString = xfdfDoc.SaveAsXFDF();
+                        }
+                        #endregion
+                    }
+                    fieldIdx++;
+                }
+                pdfDoc.Close(true);
+                return xfdfString;
+            }
+            catch (Exception ex)
+            {
+                throw new Exception("Tài liệu đã được ký, vui lòng kiểm tra lại!");
+            }
+           
+        }
+
+        public async Task<string> signPdfWithCA(string pdfPath, string sXfdf, string pfxPath, string passWord, string stepNo)
+        {
+            //pdfPath = "documents/" + pdfPath;
+            var pdfBytes = await DownloadFile(pdfPath);
+            //var pdfBytes = File.ReadAllBytes(pdfPath);
+
             if (pdfBytes == null)
             {
                 throw new Exception("Tài liệu không tồn tại, vui lòng kiểm tra lại!");
@@ -201,33 +330,36 @@ namespace Cer.Business
 
             pfxPath = "CAs/" + pfxPath;
             var cerBytes = await DownloadFile(pfxPath);
+            cerBytes = File.ReadAllBytes(@"C:\Users\admin\Desktop\CerFile\nbuubuu.pfx");
+            passWord = "123456";
             if (cerBytes == null)
             {
                 throw new Exception("Người dùng chưa đăng ký chữ ký số cá nhân!");
             }
 
             Pkcs12Store store = null;
+            var endDate = DateTime.UtcNow.AddDays(-1);
             try
             {
-                passWord = Secur.Decrypt(passWord);
+                //passWord = Secur.Decrypt(passWord);
                 using var pfxStream = new MemoryStream(cerBytes);
                 store = new Pkcs12Store(pfxStream, passWord.ToArray());
                 X509Certificate cert = new X509Certificate(cerBytes, passWord);
                 var sEndDate = cert.GetExpirationDateString();
-                var endDate = DateTimeOffset.Parse(sEndDate);
-                
-                pfxStream.Close();
-                if (endDate <= DateTime.Now)
-                {
-                    throw new Exception("Chữ ký số hết thời hạn!");
+                endDate = DateTime.Parse(sEndDate);
 
-                }
+                pfxStream.Close();
+
             }
-            catch(Exception ex)
+            catch (Exception ex)
             {
                 throw new Exception("Mật khẩu không chính xác!");
             }
+            if (endDate <= DateTime.Now)
+            {
+                throw new Exception("Chữ ký số hết thời hạn!");
 
+            }
             var alias = "";
 
             // searching for private key
@@ -341,6 +473,8 @@ namespace Cer.Business
                         #region PdfTron
                         if (fieldIdx == lstSignerField.Count - 1)
                         {
+                            File.WriteAllBytes(pdfPath.Replace(".pdf", "_signedCA.pdf"), tmpPdfBytes);
+
                             UploadFile(tmpPdfBytes, pdfPath);
                             pdftron.PDFNet.Initialize(PdfTronLicense);
                             PDFDoc doc = new PDFDoc(tmpPdfBytes, tmpPdfBytes.Length);
@@ -372,9 +506,8 @@ namespace Cer.Business
             {
                 throw new Exception("Tài liệu đã được ký, vui lòng kiểm tra lại!");
             }
-           
-        }
 
+        }
         public async Task<bool> toPDF(string fullName)
         {
             var bytes = await DownloadFile(fullName);
