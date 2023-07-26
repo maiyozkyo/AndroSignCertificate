@@ -295,7 +295,7 @@ namespace Cer.Business
                         {
                             pdfDoc.Save(os);
                             var signedBytes = os.ToArray();
-                            File.WriteAllBytes(pdfPath.Replace(".pdf", "_signed.pdf"), signedBytes);
+                            //File.WriteAllBytes(pdfPath.Replace(".pdf", "_signed.pdf"), signedBytes);
                             UploadFile(signedBytes, pdfPath);
                             pdftron.PDFNet.Initialize(PdfTronLicense);
                             PDFDoc pdfTronDoc = new PDFDoc(signedBytes, signedBytes.Length);
