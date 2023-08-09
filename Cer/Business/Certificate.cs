@@ -285,7 +285,7 @@ namespace Cer.Business
                             PdfGraphics graphics = page.Graphics;
                             using var imgStream = new MemoryStream(field.imgBytes);
                             PdfBitmap image = new PdfBitmap(imgStream);
-                            RectangleF imgBounds = new RectangleF(field.x1, field.y1, field.x2 - field.x1, field.y2 - field.y1);
+                            RectangleF imgBounds = new RectangleF(field.x1, page.Size.Height - field.y1, field.x2 - field.x1, field.y2 - field.y1);
                             graphics.DrawImage(image, imgBounds);
                         }
                         #endregion
