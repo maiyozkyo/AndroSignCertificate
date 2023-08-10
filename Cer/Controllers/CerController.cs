@@ -1,7 +1,8 @@
-﻿using Cer.Business;
+﻿using Amazon.Util.Internal;
+using Cer.Business;
 using Cer.Model;
 using Microsoft.AspNetCore.Mvc;
-using System.Net;
+using System.IO;
 
 // For more information on enabling Web API for empty projects, visit https://go.microsoft.com/fwlink/?LinkID=397860
 
@@ -119,27 +120,42 @@ namespace Cer.Controllers
             var result = await _Cer.UploadFile(docStream, fileName);
             return Ok(result);
         }
-        [HttpGet("ToPdf")]
-        public async Task<IActionResult> ToPDF([FromQuery] string fullName)
+
+        [HttpPost("ToPdf")]
+        public async Task<IActionResult> ToPDF([FromForm] IFormFile file)
         {
             try
             {
-                var result = await _Cer.toPDF(fullName);
-                if (result)
+                using (var oriFStream = new MemoryStream())
                 {
+                    await file.CopyToAsync(oriFStream);
+                    var result = await _Cer.toPDF(oriFStream.ToArray(), file.FileName);
+                    var success = new
+                    {
+                        Data = result,
+                        Status = true,
+                        Error = "",
+                    };
+                    //System.IO.File.WriteAllBytes("C:\\Users\\admin\\Desktop\\CerFile\\converted.pdf", result);
+                    return Ok(success);
+                }
 
-                var success = new
-                {
-                    Data = "Chuyển đổi tài liệu thành pdf thành công",
-                    Status = result,
-                    Error = "",
-                };
-                return Ok(success);
-                }
-                    else
-                {
-                    throw new Exception("Lỗi không xác định");
-                }
+                //var result = await _Cer.toPDF(fullName);
+                //if (result)
+                //{
+
+                //    var success = new
+                //    {
+                //        Data = "Chuyển đổi tài liệu thành pdf thành công",
+                //        Status = result,
+                //        Error = "",
+                //    };
+                //    return Ok(success);
+                //}
+                //else
+                //{
+                //    throw new Exception("Lỗi không xác định");
+                //}
 
             }
             catch (Exception ex)

@@ -510,10 +510,9 @@ namespace Cer.Business
             }
 
         }
-        public async Task<bool> toPDF(string fullName)
+
+        public async Task<byte[]> toPDF(byte[] bytes, string fullName)
         {
-            var bytes = await DownloadFile(fullName);
-            //bytes = File.ReadAllBytes("C:\\Users\\admin\\Desktop\\CerFile\\json.txt");
             if (bytes == null)
             {
                 throw new Exception("Tài liệu không tồn tại");
@@ -523,7 +522,7 @@ namespace Cer.Business
             var ext = Path.GetExtension(fullName);
             ext = ext.ToLower();
 
-            if (ext.Equals(".pdf")) return true;
+            if (ext.Equals(".pdf")) return bytes;
 
             var contents = new MemoryStream(bytes);
 
@@ -531,9 +530,6 @@ namespace Cer.Business
             Syncfusion.Licensing.SyncfusionLicenseProvider.RegisterLicense(SyncLicense);
             //
 
-            //List<string> wordExt = _configuration.GetSection("SyncLicense").Value.Split(" ").ToList();
-            //List<string> excelExt = _configuration.GetSection("SyncLicense").Value.Split(" ").ToList();
-            //List<string> imgExt = _configuration.GetSection("SyncLicense").Value.Split(" ").ToList(); 
             List<string> wordExt = new List<string> { ".doc", ".docm", ".docx", ".txt" };
             List<string> excelExt = new List<string> { ".xlsx", ".xlsm", ".xlsb", ".xls" };
             List<string> imgExt = new List<string> { ".bmp", ".jpeg", ".gif", ".png", ".tiff", ".icon", ".ico" };
@@ -649,9 +645,7 @@ namespace Cer.Business
             }
             if (converted != null)
             {
-                DeleteFile(fullName);
-                var update = await UploadFile(converted, fileName + ".pdf");
-                return update;
+                return converted;
             }
 
             throw new Exception(string.Format("Xảy ra lỗi, không thể chuyển tài liệu {0} thành pdf", ext));
