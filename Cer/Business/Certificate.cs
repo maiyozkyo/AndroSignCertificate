@@ -518,7 +518,6 @@ namespace Cer.Business
                 throw new Exception("Tài liệu không tồn tại");
             }
 
-            var fileName = Path.GetFileNameWithoutExtension(fullName);
             var ext = Path.GetExtension(fullName);
             ext = ext.ToLower();
 

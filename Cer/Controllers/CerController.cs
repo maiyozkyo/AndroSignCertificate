@@ -2,7 +2,11 @@
 using Cer.Business;
 using Cer.Model;
 using Microsoft.AspNetCore.Mvc;
+using MongoDB.Bson.IO;
 using System.IO;
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using static SkiaSharp.HarfBuzz.SKShaper;
 
 // For more information on enabling Web API for empty projects, visit https://go.microsoft.com/fwlink/?LinkID=397860
 
@@ -122,41 +126,19 @@ namespace Cer.Controllers
         }
 
         [HttpPost("ToPdf")]
-        public async Task<IActionResult> ToPDF([FromForm] IFormFile file)
+        public async Task<IActionResult> ToPDF([FromForm] string fileName, [FromForm] string content)
         {
             try
             {
-                using (var oriFStream = new MemoryStream())
+                var bytes = Convert.FromBase64String(content);
+                var result = await _Cer.toPDF(bytes, fileName);
+                var success = new
                 {
-                    await file.CopyToAsync(oriFStream);
-                    var result = await _Cer.toPDF(oriFStream.ToArray(), file.FileName);
-                    var success = new
-                    {
-                        Data = result,
-                        Status = true,
-                        Error = "",
-                    };
-                    //System.IO.File.WriteAllBytes("C:\\Users\\admin\\Desktop\\CerFile\\converted.pdf", result);
-                    return Ok(success);
-                }
-
-                //var result = await _Cer.toPDF(fullName);
-                //if (result)
-                //{
-
-                //    var success = new
-                //    {
-                //        Data = "Chuyển đổi tài liệu thành pdf thành công",
-                //        Status = result,
-                //        Error = "",
-                //    };
-                //    return Ok(success);
-                //}
-                //else
-                //{
-                //    throw new Exception("Lỗi không xác định");
-                //}
-
+                    Data = result,
+                    Status = true,
+                    Error = "",
+                };
+                return Ok(success);
             }
             catch (Exception ex)
             {
